@@ -33,8 +33,8 @@ YouTube Music ──> сервер (Flask + yt-dlp) ──> ffmpeg ──> /radi
 
 ### Авто — одним файлом
 
-1. Скачай `install_radio.exe` (или репозиторий целиком) и запусти
-2. Установщик сам: поставит Python (если нет) → зависимости → зарегистрирует виджет Game Bar →
+1. Скачай **[install_radio.exe](https://github.com/bmarcnhii1-max/ets2-radio-dj/releases/latest)** со страницы [Releases](https://github.com/bmarcnhii1-max/ets2-radio-dj/releases) и запусти — все файлы уже внутри exe
+2. Жми «Установить»: поставит Python (если нет) → зависимости → зарегистрирует виджет Game Bar →
    добавит медиа-кнопки в автозапуск → **пропишет радио в `live_streams.sii` игры** → запустит сервер
 3. В игре: **Radio → Custom → YT Automix DJ**
 
@@ -91,7 +91,7 @@ server.py          — весь сервер (Flask, очередь, реком�
 static/            — style.css + app.js веб-интерфейса
 overlay.html       — OBS-оверлей
 RadioWidget/       — исходники виджета Game Bar (C#/UWP)
-install_radio.exe  — установщик одним файлом
+install_radio.exe  — установщик одним файлом (сборка в Releases)
 smtc_bridge.ps1    — медиа-кнопки Windows (Play/Pause/Next в Game Bar и на клавиатуре)
 ```
 

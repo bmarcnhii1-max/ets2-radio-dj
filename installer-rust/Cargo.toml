@@ -1,0 +1,16 @@
+[package]
+name = "ets2-radio-installer"
+version = "1.0.0"
+edition = "2021"
+
+[dependencies]
+eframe = "0.27"
+zip = "1.1"
+
+[build-dependencies]
+winres = "0.1"
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true

@@ -43,3 +43,8 @@ RadioWidget/.vs/
 backups/
 _*.ps1
 install_radio.exe
+
+# --- Rust сборка ---
+installer-rust/target/
+ETS2RadioDJ_bundle.zip
+install_icon.ico
