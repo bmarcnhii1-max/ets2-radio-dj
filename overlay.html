@@ -96,8 +96,8 @@ html, body {
   to { opacity: 1; transform: translateX(0); }
 }
 
-/* Пауза */
-.paused .badge { color: #f5a623; }
+/* Пауза (после .station — чтобы жёлтый перебил синий) */
+.paused .badge { color: #f5a623 !important; }
 .paused .cover { opacity: 0.55; }
 .paused .track { color: rgba(255,255,255,0.6); }
 
@@ -147,7 +147,6 @@ if (scale !== 1) {
   root.style.width = `${100 / scale}%`;
 }
 
-let lastTitle = null;
 
 function fmt(s) {
   s = Math.max(0, Math.floor(s || 0));
@@ -164,9 +163,10 @@ async function update() {
     const card = document.getElementById('card');
 
     const isStation = !!t.is_station;
+    const isPaused = !!t.is_paused;
     card.classList.toggle('station', isStation);
-    document.getElementById('badge').textContent = isStation
-      ? 'СЕЙЧАС В ЭФИРЕ'
+    document.getElementById('badge').textContent = isPaused ? 'ПАУЗА'
+      : isStation ? 'СЕЙЧАС В ЭФИРЕ'
       : 'СЕЙЧАС ИГРАЕТ';
     if (t.title && trackEl.textContent !== t.title) {
       trackEl.textContent = t.title;
@@ -184,7 +184,7 @@ async function update() {
       cover.style.display = 'none';
     }
 
-    card.classList.toggle('paused', !!t.is_paused);
+
 
     const row = document.getElementById('progressRow');
     if (isStation) {
@@ -199,7 +199,6 @@ async function update() {
       document.getElementById('timeLabel').textContent =
         fmt(cur) + ' / ' + (dur ? fmt(dur) : '--:--');
     }
-    lastTitle = t.title || null;
   } catch (e) {
     document.getElementById('track').textContent = 'Сервер недоступен';
     document.getElementById('artist').textContent = '';

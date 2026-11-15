@@ -41,6 +41,7 @@ namespace RadioWidget
         private int currentTime;
         private int duration = 180;
         private string lastTitle = "";
+        private string _lastQueueSig = null;
         private int pollFails;
         private string currentVideoId = "";
         private string currentTitle = "";
@@ -81,6 +82,7 @@ namespace RadioWidget
             {
                 timer.Start();
                 playlistTimer.Start();
+                if (activeTab == "radio") radioTimer.Start();
                 _ = RefreshPlaylistsAsync();
             };
             this.Unloaded += (s, e) =>
@@ -234,20 +236,27 @@ namespace RadioWidget
                     UpdateSeekThumb();
                 }
 
-                // Кеш/стрим
+                // Кеш/стрим + громкость (volume_boost на сервере хранится строкой)
                 if (obj.ContainsKey("config"))
                 {
                     try
                     {
                         var cfg = obj.GetNamedObject("config");
                         cacheEnabled = cfg.ContainsKey("cache_enabled") && cfg.GetNamedBoolean("cache_enabled", false);
-                        double boostPct = (cfg.ContainsKey("volume_boost")
-                            ? cfg.GetNamedNumber("volume_boost", 1.0) : 1.0) * 100.0;
-                        int pct = (int)Math.Round(boostPct / 5.0) * 5; // кратно шагу слайдера
-                        if (!volumeHeld && Math.Abs(VolumeSlider.Value - pct) > 1)
+                        if (cfg.ContainsKey("volume_boost"))
                         {
-                            lastServerVolumePct = pct;
-                            VolumeSlider.Value = pct;
+                            double boost = 1.0;
+                            var v = cfg.GetNamedValue("volume_boost");
+                            if (v.ValueType == Windows.Data.Json.JsonValueType.Number)
+                                boost = v.GetNumber();
+                            else if (v.ValueType == Windows.Data.Json.JsonValueType.String)
+                                double.TryParse(v.GetString().Replace(',', '.'), out boost);
+                            int pct = (int)Math.Round(boost * 100.0 / 5.0) * 5; // кратно шагу слайдера
+                            if (!volumeHeld && Math.Abs(VolumeSlider.Value - pct) > 1)
+                            {
+                                lastServerVolumePct = pct;
+                                VolumeSlider.Value = pct;
+                            }
                         }
                     }
                     catch { }
@@ -261,7 +270,7 @@ namespace RadioWidget
                 string profileName = obj.ContainsKey("active_profile") ? obj.GetNamedString("active_profile", "") : "";
                 bool authed = obj.ContainsKey("is_auth") && obj.GetNamedBoolean("is_auth", false);
                 string accountName = profileName;
-                if (obj.ContainsKey("account_info"))
+                if (obj.ContainsKey("account_info") && obj.GetNamedValue("account_info").ValueType == Windows.Data.Json.JsonValueType.Object)
                 {
                     try
                     {
@@ -303,6 +312,23 @@ namespace RadioWidget
             int count = queue == null ? 0 : (int)queue.Count;
             QueueCountText.Text = count + " в очереди";
             QueueEmptyText.Visibility = count == 0 ? Visibility.Visible : Visibility.Collapsed;
+
+            // Пересборка каждый тик сбрасывает скролл и теряет тапы —
+            // перерисовываем только при изменении содержимого
+            var sig = new System.Text.StringBuilder();
+            if (queue != null)
+            {
+                for (uint i = 0; i < queue.Count; i++)
+                {
+                    var it = queue.GetObjectAt(i);
+                    sig.Append(it.GetNamedString("videoId", "")).Append('|');
+                    sig.Append(it.GetNamedString("title", "")).Append('|');
+                    sig.Append(it.GetNamedString("artist", "")).Append(';');
+                }
+            }
+            string sigStr = sig.ToString();
+            if (sigStr == _lastQueueSig) return;
+            _lastQueueSig = sigStr;
 
             QueueListPanel.Children.Clear();
             if (queue == null) return;
@@ -349,6 +375,8 @@ namespace RadioWidget
                 var health = obj.ContainsKey("health") ? obj.GetNamedObject("health") : null;
 
                 StationsListPanel.Children.Clear();
+                if (obj.ContainsKey("active"))
+                    activeStationId = obj.GetNamedString("active", "");
                 int aliveCount = 0, total = 0;
                 for (uint i = 0; i < stations.Count; i++)
                 {

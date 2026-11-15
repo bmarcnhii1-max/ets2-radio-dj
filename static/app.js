@@ -29,7 +29,6 @@ let lyricsShown = false;
 let lyricsData = null;
 let lyricsVideoId = null;
 
-/* Визуализатор */
 let audioCtx = null;
 let analyserNode = null;
 let vizCanvas = null;
@@ -785,16 +784,16 @@ function toggleBrowserTest() {
     audio.play().then(() => setupVisualizer()).catch(() => {
       showToast('Браузер не разрешил запустить тест звука');
       audio.src = "";
-      btn.textContent = "Тест звука";
+      btn.innerHTML = icon('headphones', 'icon icon-stroke') + ' Тест звука';
       isBrowserTesting = false;
     });
-    btn.textContent = "Остановить тест";
+    btn.innerHTML = icon('stop') + ' Остановить тест';
     isBrowserTesting = true;
     showToast("Тест звука запущен");
   } else {
     audio.pause();
     audio.src = "";
-    btn.textContent = "Тест звука";
+    btn.innerHTML = icon('headphones', 'icon icon-stroke') + ' Тест звука';
     isBrowserTesting = false;
     if (vizCanvas) vizCanvas.style.display = 'none';
   }

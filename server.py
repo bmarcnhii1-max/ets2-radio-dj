@@ -447,34 +447,43 @@ DEFAULT_STATIONS = [
 # Проверка доступности станций (кэшируется на 5 минут)
 stations_health_cache = {"t": 0.0, "alive": {}}
 
+stations_health_inflight = False
+
 def check_stations_health():
     """Параллельно пингует потоки: кто отвечает байтами — тот живой.
     Из-за гео-блокировки часть потоков может быть недоступна конкретно у тебя."""
+    global stations_health_inflight
     now = time.time()
-    if now - stations_health_cache["t"] < 300:
+    if now - stations_health_cache["t"] < 300 or stations_health_inflight:
         return stations_health_cache["alive"]
-    stations = get_stations()
+    stations_health_inflight = True
+    try:
+        stations = get_stations()
 
-    def _probe(st):
-        try:
-            r = requests.get(st["url"], stream=True, timeout=4,
-                             headers={"User-Agent": "ETS2RadioDJ/1.0"})
-            got = 0
-            for chunk in r.iter_content(8192):
-                got += len(chunk)
-                if got >= 8192:
-                    break
-            r.close()
-            return got > 4096
-        except Exception:
-            return False
+        def _probe(st):
+            try:
+                # timeout=(connect, read): total deadline ~6с, чтобы поток-хулиган
+                # не держал весь запрос /api/stations?health=1 полминуты
+                r = requests.get(st["url"], stream=True, timeout=(3, 3),
+                                 headers={"User-Agent": "ETS2RadioDJ/1.0"})
+                got = 0
+                for chunk in r.iter_content(8192):
+                    got += len(chunk)
+                    if got >= 8192:
+                        break
+                r.close()
+                return got > 4096
+            except Exception:
+                return False
 
-    with ThreadPoolExecutor(max_workers=min(10, len(stations))) as ex:
-        flags = list(ex.map(_probe, stations))
-    alive = {st["id"]: ok for st, ok in zip(stations, flags)}
-    stations_health_cache["t"] = now
-    stations_health_cache["alive"] = alive
-    return alive
+        with ThreadPoolExecutor(max_workers=min(10, len(stations))) as ex:
+            flags = list(ex.map(_probe, stations))
+        alive = {st["id"]: ok for st, ok in zip(stations, flags)}
+        stations_health_cache["t"] = time.time()
+        stations_health_cache["alive"] = alive
+        return alive
+    finally:
+        stations_health_inflight = False
 
 def load_stations():
     if os.path.exists(STATIONS_FILE):
@@ -491,7 +500,7 @@ def load_stations():
 def get_stations():
     return load_stations()
 
-def play_station_loop(station):
+def play_station_loop(station, restarts=0):
     """Крутит реальный интернет-стрим через тот же пайп /radio.mp3.
     Блокирует поток (вызывается из dj_thread). Очередь YouTube не трогает."""
     global station_state
@@ -534,12 +543,15 @@ def play_station_loop(station):
             seek_event.clear()
         if current_track_info.get("is_paused"):
             # тишина темпом битрейта, как у треков
+            p_start = time.time()
             while current_track_info.get("is_paused"):
                 if skip_event.is_set() or not cmd_queue.empty():
                     break
                 kbps = int(re.sub(r'\D', '', str(bitrate)) or 128)
                 push_chunk(MP3_SILENCE_FRAME * max(256, int(kbps * 128 / 8)))
                 time.sleep(1.0)
+            # сдвигаем старт эфира на длину паузы, чтобы current_time не скакал
+            ff_start += time.time() - p_start
             if skip_event.is_set() or not cmd_queue.empty():
                 break
         with proc_lock:
@@ -552,28 +564,31 @@ def play_station_loop(station):
             if skip_event.is_set() or not cmd_queue.empty():
                 break
             kill_current_proc()
-            if time.time() - ff_start < 5:
-                # поток не ожил за 5 секунд — скорее всего мёртвый URL или
-                # гео-блок. Не крутимся вечно: останавливаем станцию.
-                try:
-                    with open(ff_log_path, 'r', encoding='utf-8', errors='replace') as lf:
-                        print(f"[STATION {station.get('name')}] ffmpeg stderr:\n{lf.read()[-400:]}", flush=True)
-                except Exception:
-                    pass
+            def _station_fail(reason):
                 with state_lock:
                     if station_state and station_state.get("id") == station.get("id"):
                         station_state = None
                 current_track_info.update({
                     "title": station.get("name", "Радио"),
-                    "artist": "Станция недоступна (проверь здоровье в списке станций)",
+                    "artist": reason,
                     "status": "Ошибка станции",
                     "is_station": False,
                     "current_time": 0
                 })
                 skip_event.clear()
                 return
+            age = time.time() - ff_start
+            if age < 5 or restarts >= 8:
+                # мёртвый URL/гео-блок или 8 неудачных переподключений подряд —
+                # не крутимся вечно: останавливаем станцию
+                try:
+                    with open(ff_log_path, 'r', encoding='utf-8', errors='replace') as lf:
+                        print(f"[STATION {station.get('name')}] ffmpeg stderr:\n{lf.read()[-400:]}", flush=True)
+                except Exception:
+                    pass
+                return _station_fail("Станция недоступна (проверь здоровье в списке станций)")
             time.sleep(2.0)
-            return play_station_loop(station)
+            return play_station_loop(station, restarts + 1)
         if skip_event.is_set() or not cmd_queue.empty():
             break
         current_track_info["current_time"] = int(time.time() - ff_start)
@@ -1761,7 +1776,19 @@ def get_direct_stream_url(vid):
             info = ydl.extract_info(f"https://www.youtube.com/watch?v={vid}", download=False)
             url = info.get('url')
             if url:
-                stream_url_cache[vid] = (now + STREAM_URL_TTL_SEC, url, info)
+                # Кэшируем только нужные поля: полный info (форматы и пр.)
+                # раздувает RSS до десятков МБ на 300 записей
+                artists = info.get('artists') or []
+                first_artist = artists[0] if artists else {}
+                artist_name = (first_artist.get('name') if isinstance(first_artist, dict) else first_artist) or info.get('uploader')
+                slim = {
+                    "title": info.get('title'),
+                    "artist": artist_name,
+                    "thumbnail": info.get('thumbnail'),
+                    "duration": info.get('duration'),
+                }
+                stream_url_cache[vid] = (now + STREAM_URL_TTL_SEC, url, slim)
+                info = slim
             gc.collect()
             return url, info
     except Exception as e:
@@ -1831,6 +1858,9 @@ def dj_thread():
                 query = task.get("query", "")
                 start_sec = task.get("offset", 0)
                 meta_hint = task.get("meta")
+                # снапшот поколения: пока парсим сеть, профиль могут переключить —
+                # тогда результат устарел и затирать им свежую очередь нельзя
+                task_generation = playback_generation
 
                 # Готовый список треков (игр своих плейлистов) — без парсинга
                 preset_tracks = task.get("tracks")
@@ -1839,6 +1869,9 @@ def dj_thread():
                     is_album = False
                 else:
                     new_tracks, is_album = parse_input_to_track_queue(query, meta_hint)
+                if task_generation != playback_generation:
+                    print("[DJ] Результат задачи устарел (профиль переключился) — выбрасываю")
+                    continue
                 if not new_tracks:
                     current_track_info["title"] = "Трек не найден!"
                     current_track_info["album"] = ""
@@ -2268,16 +2301,18 @@ def dj_thread():
                     continue
 
             # Очередь исчерпана: ГАРАНТИРОВАННОЕ БЕСКОНЕЧНОЕ РАДИО! Эфир НИКОГДА не встает!
-            # skip_event тут НЕ проверяем: после скипа последнего трека он
-            # застревал в set() и радио молчало вечно — cmd_queue.empty()
-            # уже покрывает случай "сейчас придёт команда".
+            # skip_event тут НЕ проверяем нигде: после скипа последнего трека он
+            # застревает в set() и радио молчало вечно — cmd_queue.empty()
+            # уже покрывает случай "сейчас придёт команда". Гасим событие,
+            # чтобы оно не застряло на следующем витке.
+            skip_event.clear()
             while not track_queue_list and cmd_queue.empty():
                 print("[RADIO] Очередь пуста! Автоматически восстанавливаем радио-поток...")
                 for _ in range(6):
-                    if track_queue_list or not cmd_queue.empty() or skip_event.is_set():
+                    if track_queue_list or not cmd_queue.empty():
                         break
                     time.sleep(0.5)
-                if track_queue_list or not cmd_queue.empty() or skip_event.is_set():
+                if track_queue_list or not cmd_queue.empty():
                     break
 
                 seed_to_use = (current_playing_item.get("videoId") if current_playing_item else None) or "6Pr1yeLw8XI"
@@ -2378,8 +2413,8 @@ def discord_rpc_thread():
         title = str(track.get("title") or "").strip()
         artist = str(track.get("artist") or "").strip()
         if not title or title in ("Трек не найден!", "Ошибка поиска") or track.get("is_station"):
-            # станция: нечего показывать — очистим
-            if rpc_connected and rpc:
+            # станция: нечего показывать — очистим (один раз, не каждый цикл)
+            if rpc_connected and rpc and last_signature is not None:
                 try:
                     rpc.clear()
                 except Exception:
@@ -3485,7 +3520,6 @@ def reorder_queue():
 # --- ИНТЕРНЕТ-РАДИОСТАНЦИИ ---
 
 @app.route('/api/stations')
-@app.route('/api/stations')
 def stations_list():
     stations = get_stations()
     with state_lock:
@@ -3509,8 +3543,10 @@ def station_play():
     with state_lock:
         playback_generation += 1
         radio_inflight = 0
-    kill_current_proc()
+    # сначала skip, потом kill — иначе окно между kill и skip станция
+    # прочитает как "поток умер" и мигнёт "Ошибка станции"
     skip_event.set()
+    kill_current_proc()
     cmd_queue.put({"station": dict(station)})
     return jsonify({"ok": True, "station": station})
 
@@ -3520,8 +3556,8 @@ def station_stop():
     with state_lock:
         playback_generation += 1
         radio_inflight = 0
-    kill_current_proc()
     skip_event.set()
+    kill_current_proc()
     cmd_queue.put({"resume_queue": True})
     return jsonify({"ok": True})
 
@@ -3971,6 +4007,10 @@ def player_control():
         return jsonify({"ok": True, "is_paused": current_track_info["is_paused"]})
 
     elif action == "seek":
+        # seek на интернет-станции убивал бы её ffmpeg: гасим безвредно,
+        # чтобы ±15 в любом интерфейсе не рвали эфир
+        if current_track_info.get("is_station"):
+            return jsonify({"ok": True, "seek_skipped": "station"})
         try:
             target = int(data.get('time', 0))
         except (ValueError, TypeError):

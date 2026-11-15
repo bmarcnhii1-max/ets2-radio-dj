@@ -15,8 +15,12 @@ body {
   display: flex;
   justify-content: center;
   align-items: center;
-  overflow: hidden;
+  overflow: auto;
   user-select: none;
+}
+@media (max-height: 620px) {
+  body { align-items: flex-start; }
+  .wrap { padding: 10px 0; }
 }
 .wrap {
   width: min(92vw, 560px);
@@ -122,7 +126,7 @@ body {
 </div>
 
 <script>
-let lastVideoId = null, paused = false;
+let paused = false;
 
 function fmt(s) {
   s = Math.max(0, Math.floor(s || 0));
@@ -188,7 +192,6 @@ async function update() {
       document.getElementById('fill').style.width = dur ? Math.min(100, (cachedCur / dur) * 100) + '%' : '0%';
       document.getElementById('time').textContent = fmt(cachedCur) + ' / ' + (dur ? fmt(dur) : '--:--');
     }
-    lastVideoId = t.video_id || null;
   } catch (e) {
     document.getElementById('err').style.display = '';
   }
