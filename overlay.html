@@ -1,12 +1,14 @@
 <!DOCTYPE html>
-<html lang="uk">
+<html lang="ru">
 <head>
 <meta charset="UTF-8">
 <title>ETS2 Radio DJ — OBS Overlay</title>
 <style>
 :root {
   --accent: #1db954;
-  --bg-overlay: rgba(0, 0, 0, 0.55);
+  --card: rgba(16, 18, 22, 0.92);
+  --line: rgba(255, 255, 255, 0.10);
+  --muted: rgba(255, 255, 255, 0.72);
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body {
@@ -16,62 +18,65 @@ html, body {
 }
 #scale-root { transform-origin: top left; }
 
+/* Компактная плотная карточка: без блюра (тяжёл в OBS), фон почти непрозрачный,
+   ширина по содержимому — не тянется на весь кадр */
 .overlay-card {
   display: flex;
   align-items: center;
-  gap: 16px;
-  background: var(--bg-overlay);
-  border-radius: 16px;
-  padding: 16px 20px;
-  max-width: 560px;
-  backdrop-filter: blur(8px);
+  gap: 14px;
+  width: fit-content;
+  max-width: 640px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px 18px 12px 12px;
 }
 .cover {
-  width: 108px; height: 108px;
-  border-radius: 10px;
+  width: 84px; height: 84px;
+  border-radius: 8px;
   object-fit: cover;
-  background: rgba(255,255,255,0.08);
+  background: #26282c;
   flex-shrink: 0;
-}
-.cover.placeholder {
-  display: flex; align-items: center; justify-content: center;
-  font-size: 40px;
 }
 .meta { flex: 1; min-width: 0; }
 .badge {
   display: inline-block;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 1.5px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.6px;
   color: var(--accent);
-  margin-bottom: 6px;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 .track {
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 800;
   color: #fff;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .artist {
-  font-size: 14px;
-  color: rgba(255,255,255,0.75);
+  font-size: 12.5px;
+  color: var(--muted);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  margin-top: 2px;
+  margin-top: 1px;
 }
 .progress-row {
   display: flex; align-items: center; gap: 8px;
-  margin-top: 10px;
+  margin-top: 9px;
 }
 .time {
   font-size: 11px;
   font-family: 'Consolas', monospace;
-  color: rgba(255,255,255,0.7);
-  min-width: 38px;
+  color: var(--muted);
+  white-space: nowrap;
 }
 .progress {
   flex: 1;
-  height: 6px;
-  background: rgba(255,255,255,0.18);
+  height: 5px;
+  background: rgba(255,255,255,0.16);
   border-radius: 3px;
   overflow: hidden;
 }
@@ -83,29 +88,35 @@ html, body {
   transition: width 0.8s linear;
 }
 
-/* Смена трека: лёгкий slide-in */
+/* Смена трека: короткий slide-in */
 .track, .artist { transition: opacity 0.3s; }
-.track-changed { animation: slideIn 0.5s ease; }
+.track-changed { animation: slideIn 0.45s ease; }
 @keyframes slideIn {
-  from { opacity: 0; transform: translateX(12px); }
+  from { opacity: 0; transform: translateX(10px); }
   to { opacity: 1; transform: translateX(0); }
 }
 
 /* Пауза */
 .paused .badge { color: #f5a623; }
-.paused .cover { opacity: 0.5; }
+.paused .cover { opacity: 0.55; }
 .paused .track { color: rgba(255,255,255,0.6); }
 
-/* Компакт-режим: только трек+артист */
+/* Радиостанция: прогресс скрыт */
+.station .progress-row { visibility: hidden; }
+.station .badge { color: #4fa8ff; }
+
+/* Компакт: без обложки */
 .compact .cover { display: none; }
-.compact .overlay-card { padding: 10px 16px; }
-.compact .track { font-size: 17px; }
-.compact .artist { font-size: 12px; }
+.compact .overlay-card { padding: 8px 14px; max-width: 460px; }
+.compact .track { font-size: 15px; }
+.compact .artist { font-size: 11px; }
 .compact .progress-row { margin-top: 5px; }
+.compact .badge { font-size: 9px; margin-bottom: 2px; }
 
-/* Прячем фон карточки, если transparent=0 не задан — по умолчанию с подложкой */
-.nobg .overlay-card { background: transparent; backdrop-filter: none; }
-
+/* Совсем без фона */
+.nobg .overlay-card { background: transparent; border-color: transparent; }
+/* Тень вместо плашки — вариант для светлых сцен */
+.shadow .overlay-card { box-shadow: 0 2px 14px rgba(0,0,0,0.8); background: transparent; border-color: transparent; }
 </style>
 </head>
 <body>
@@ -117,9 +128,8 @@ html, body {
       <div class="track" id="track">…</div>
       <div class="artist" id="artist">…</div>
       <div class="progress-row" id="progressRow">
-        <span class="time" id="curTime">0:00</span>
         <div class="progress"><div class="progress-fill" id="fill"></div></div>
-        <span class="time" id="durTime">0:00</span>
+        <span class="time" id="timeLabel">0:00 / 0:00</span>
       </div>
     </div>
   </div>
@@ -129,6 +139,7 @@ html, body {
 const params = new URLSearchParams(location.search);
 if (params.get('compact') === '1') document.body.classList.add('compact');
 if (params.get('nobg') === '1') document.body.classList.add('nobg');
+if (params.get('shadow') === '1') document.body.classList.add('shadow');
 const scale = parseFloat(params.get('scale') || '1');
 if (scale !== 1) {
   const root = document.getElementById('scale-root');
@@ -136,8 +147,7 @@ if (scale !== 1) {
   root.style.width = `${100 / scale}%`;
 }
 
-let lastVideoId = null;
-let lastPauseState = null;
+let lastTitle = null;
 
 function fmt(s) {
   s = Math.max(0, Math.floor(s || 0));
@@ -151,12 +161,12 @@ async function update() {
     const data = await res.json();
     const t = data.track || {};
     const trackEl = document.getElementById('track');
-    const artistEl = document.getElementById('artist');
     const card = document.getElementById('card');
 
     const isStation = !!t.is_station;
+    card.classList.toggle('station', isStation);
     document.getElementById('badge').textContent = isStation
-      ? (t.title || 'РАДІО').toUpperCase()
+      ? 'РАДИО: ' + (t.artist || t.status || 'LIVE').toUpperCase()
       : 'ETS2 RADIO DJ';
     if (t.title && trackEl.textContent !== t.title) {
       trackEl.textContent = t.title;
@@ -164,31 +174,32 @@ async function update() {
       void trackEl.offsetWidth; // рестарт анимации
       trackEl.classList.add('track-changed');
     }
-    artistEl.textContent = t.artist || '';
+    document.getElementById('artist').textContent = t.artist || '';
 
     const cover = document.getElementById('cover');
     if (t.thumbnail) {
-      if (cover.src !== t.thumbnail) cover.src = t.thumbnail;
-      cover.classList.remove('placeholder');
+      if (cover.getAttribute('src') !== t.thumbnail) cover.src = t.thumbnail;
+      cover.style.display = '';
+    } else if (isStation) {
+      cover.style.display = 'none';
     }
 
     card.classList.toggle('paused', !!t.is_paused);
-    if (!!t.is_paused !== lastPauseState) lastPauseState = !!t.is_paused;
 
     const row = document.getElementById('progressRow');
-    if (isStation || t.is_paused) {
-      row.style.visibility = isStation ? 'hidden' : 'visible';
-    }
-    if (!isStation) {
+    if (isStation) {
+      row.style.visibility = 'hidden';
+    } else {
+      row.style.visibility = '';
       const dur = t.duration || 0;
       const cur = t.current_time || 0;
-      document.getElementById('curTime').textContent = fmt(cur);
-      document.getElementById('durTime').textContent = dur ? fmt(dur) : '';
       document.getElementById('fill').style.width = dur
         ? Math.min(100, (cur / dur) * 100) + '%'
         : '0%';
+      document.getElementById('timeLabel').textContent =
+        fmt(cur) + ' / ' + (dur ? fmt(dur) : '--:--');
     }
-    lastVideoId = t.video_id || null;
+    lastTitle = t.title || null;
   } catch (e) {
     document.getElementById('track').textContent = 'Сервер недоступен';
     document.getElementById('artist').textContent = '';
