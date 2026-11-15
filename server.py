@@ -2342,6 +2342,10 @@ def home():
 def overlay_page():
     return send_from_directory(BASE_DIR, 'overlay.html')
 
+@app.route('/tablet')
+def tablet_page():
+    return send_from_directory(BASE_DIR, 'tablet.html')
+
 # --- DISCORD RICH PRESENCE ---
 
 def discord_rpc_thread():

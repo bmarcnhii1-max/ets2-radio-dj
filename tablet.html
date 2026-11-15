@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>ETS2 Radio DJ — Планшет</title>
+<style>
+:root { --accent: #1db954; --muted: rgba(255,255,255,0.65); }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  background: #121212;
+  color: #fff;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+  user-select: none;
+}
+.wrap {
+  width: min(92vw, 560px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
+.badge {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: var(--accent);
+}
+.badge.paused { color: #f5a623; }
+.badge.station { color: #4fa8ff; }
+.cover-box {
+  width: min(70vw, 340px);
+  height: min(70vw, 340px);
+  border-radius: 20px;
+  overflow: hidden;
+  background: #242424;
+  box-shadow: 0 18px 60px rgba(0,0,0,0.6);
+  display: flex; align-items: center; justify-content: center;
+}
+.cover-box img { width: 100%; height: 100%; object-fit: cover; }
+.cover-box.paused img { opacity: 0.5; transition: opacity 0.3s; }
+.note {
+  position: absolute; font-size: 44px; color: #555;
+}
+.track {
+  font-size: 30px;
+  font-weight: 800;
+  text-align: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.artist {
+  font-size: 17px;
+  color: var(--muted);
+  text-align: center;
+  max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.bar {
+  width: 100%;
+  height: 8px;
+  background: #2e2e2e;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.bar-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  border-radius: 4px;
+  transition: width 0.9s linear;
+}
+.time {
+  font-size: 13px;
+  font-family: 'Consolas', monospace;
+  color: var(--muted);
+}
+.controls { display: flex; gap: 16px; align-items: center; }
+.ctl {
+  border: none;
+  border-radius: 50%;
+  background: #242424;
+  color: #fff;
+  width: 64px; height: 64px;
+  font-size: 22px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+}
+.ctl.main { width: 84px; height: 84px; font-size: 30px; background: var(--accent); color: #000; }
+.ctl:active { transform: scale(0.94); }
+.ctl svg { width: 26px; height: 26px; }
+.ctl.main svg { width: 34px; height: 34px; }
+.err { color: #f5a623; font-size: 14px; display: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="badge" id="badge">СЕЙЧАС ИГРАЕТ</div>
+  <div class="cover-box" id="coverBox">
+    <div class="note" id="noteIcon">📻</div>
+    <img id="cover" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="" style="display:none">
+  </div>
+  <div class="track" id="track">…</div>
+  <div class="artist" id="artist">…</div>
+  <div class="bar" id="bar"><div class="bar-fill" id="fill"></div></div>
+  <div class="time" id="time">0:00 / 0:00</div>
+  <div class="controls">
+    <button class="ctl" onclick="ctl('previous')" title="Предыдущий">⏮</button>
+    <button class="ctl" onclick="ctl('seek', -15)" title="-15 сек">⏪</button>
+    <button class="ctl main" id="playBtn" onclick="ctl('pause')">⏸</button>
+    <button class="ctl" onclick="ctl('seek', 15)" title="+15 сек">⏩</button>
+    <button class="ctl" onclick="ctl('skip')" title="Следующий">⏭</button>
+  </div>
+  <div class="err" id="err">Сервер недоступен — проверь start_radio.bat</div>
+</div>
+
+<script>
+let lastVideoId = null, paused = false;
+
+function fmt(s) {
+  s = Math.max(0, Math.floor(s || 0));
+  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+}
+
+async function ctl(action, time) {
+  const body = { action };
+  if (time !== undefined) body.time = Math.max(0, Math.floor((getCurrentSec() || 0) + time));
+  try {
+    await fetch('/api/control', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    update();
+  } catch (e) {}
+}
+
+let cachedCur = 0;
+function getCurrentSec() { return cachedCur; }
+
+async function update() {
+  try {
+    const res = await fetch('/api/status');
+    const data = await res.json();
+    const t = data.track || {};
+    document.getElementById('err').style.display = 'none';
+
+    const isStation = !!t.is_station;
+    paused = !!t.is_paused;
+    const badge = document.getElementById('badge');
+    badge.classList.toggle('paused', paused);
+    badge.classList.toggle('station', isStation);
+    badge.textContent = paused ? 'ПАУЗА'
+      : isStation ? 'РАДИО В ЭФИРЕ'
+      : 'СЕЙЧАС ИГРАЕТ';
+    document.getElementById('playBtn').textContent = paused ? '▶' : '⏸';
+
+    const trackEl = document.getElementById('track');
+    trackEl.textContent = t.title || '—';
+    document.getElementById('artist').textContent = t.artist || '';
+
+    const cover = document.getElementById('cover');
+    const noteIcon = document.getElementById('noteIcon');
+    document.getElementById('coverBox').classList.toggle('paused', paused);
+    if (t.thumbnail) {
+      cover.src = t.thumbnail;
+      cover.style.display = '';
+      noteIcon.style.display = 'none';
+    } else {
+      cover.style.display = 'none';
+      noteIcon.style.display = '';
+    }
+
+    cachedCur = t.current_time || 0;
+    const dur = t.duration || 0;
+    if (isStation) {
+      document.getElementById('bar').style.visibility = 'hidden';
+      document.getElementById('time').textContent = 'прямой эфир';
+    } else {
+      document.getElementById('bar').style.visibility = '';
+      document.getElementById('fill').style.width = dur ? Math.min(100, (cachedCur / dur) * 100) + '%' : '0%';
+      document.getElementById('time').textContent = fmt(cachedCur) + ' / ' + (dur ? fmt(dur) : '--:--');
+    }
+    lastVideoId = t.video_id || null;
+  } catch (e) {
+    document.getElementById('err').style.display = '';
+  }
+}
+
+update();
+setInterval(update, 1000);
+</script>
+</body>
+</html>
