@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<title>ETS2 Radio DJ — OBS Overlay</title>
+<style>
+:root {
+  --accent: #1db954;
+  --bg-overlay: rgba(0, 0, 0, 0.55);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body {
+  background: transparent;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  overflow: hidden;
+}
+#scale-root { transform-origin: top left; }
+
+.overlay-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: var(--bg-overlay);
+  border-radius: 16px;
+  padding: 16px 20px;
+  max-width: 560px;
+  backdrop-filter: blur(8px);
+}
+.cover {
+  width: 108px; height: 108px;
+  border-radius: 10px;
+  object-fit: cover;
+  background: rgba(255,255,255,0.08);
+  flex-shrink: 0;
+}
+.cover.placeholder {
+  display: flex; align-items: center; justify-content: center;
+  font-size: 40px;
+}
+.meta { flex: 1; min-width: 0; }
+.badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+.track {
+  font-size: 22px;
+  font-weight: 800;
+  color: #fff;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.artist {
+  font-size: 14px;
+  color: rgba(255,255,255,0.75);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  margin-top: 2px;
+}
+.progress-row {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 10px;
+}
+.time {
+  font-size: 11px;
+  font-family: 'Consolas', monospace;
+  color: rgba(255,255,255,0.7);
+  min-width: 38px;
+}
+.progress {
+  flex: 1;
+  height: 6px;
+  background: rgba(255,255,255,0.18);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width 0.8s linear;
+}
+
+/* Смена трека: лёгкий slide-in */
+.track, .artist { transition: opacity 0.3s; }
+.track-changed { animation: slideIn 0.5s ease; }
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Пауза */
+.paused .badge { color: #f5a623; }
+.paused .cover { opacity: 0.5; }
+.paused .track { color: rgba(255,255,255,0.6); }
+
+/* Компакт-режим: только трек+артист */
+.compact .cover { display: none; }
+.compact .overlay-card { padding: 10px 16px; }
+.compact .track { font-size: 17px; }
+.compact .artist { font-size: 12px; }
+.compact .progress-row { margin-top: 5px; }
+
+/* Прячем фон карточки, если transparent=0 не задан — по умолчанию с подложкой */
+.nobg .overlay-card { background: transparent; backdrop-filter: none; }
+
+/* Телеметрия */
+.tele-row {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  margin-top: 10px;
+  display: none;
+}
+.tele-row.show { display: flex; }
+.tele-speed {
+  font-size: 30px;
+  font-weight: 800;
+  font-family: 'Consolas', monospace;
+  color: var(--accent);
+  line-height: 1;
+}
+.tele-speed small { font-size: 11px; color: rgba(255,255,255,0.65); font-weight: 400; }
+.tele-extra { font-size: 12px; color: rgba(255,255,255,0.75); }
+.tele-extra b { color: #fff; }
+</style>
+</head>
+<body>
+<div id="scale-root">
+  <div class="overlay-card" id="card">
+    <img class="cover" id="cover" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="">
+    <div class="meta">
+      <div class="badge" id="badge">ETS2 RADIO DJ</div>
+      <div class="track" id="track">…</div>
+      <div class="artist" id="artist">…</div>
+      <div class="progress-row" id="progressRow">
+        <span class="time" id="curTime">0:00</span>
+        <div class="progress"><div class="progress-fill" id="fill"></div></div>
+        <span class="time" id="durTime">0:00</span>
+      </div>
+      <div class="tele-row" id="teleRow">
+        <span class="tele-speed"><span id="teleSpeed">0</span> <small>км/ч</small></span>
+        <span class="tele-extra">Передача: <b id="teleGear">—</b></span>
+        <span class="tele-extra">Топливо: <b id="teleFuel">—</b>%</span>
+        <span class="tele-extra" id="telePaused" style="color:#f5a623; display:none;">ПАУЗА ИГРЫ</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const params = new URLSearchParams(location.search);
+if (params.get('compact') === '1') document.body.classList.add('compact');
+if (params.get('nobg') === '1') document.body.classList.add('nobg');
+const scale = parseFloat(params.get('scale') || '1');
+if (scale !== 1) {
+  const root = document.getElementById('scale-root');
+  root.style.transform = `scale(${scale})`;
+  root.style.width = `${100 / scale}%`;
+}
+
+let lastVideoId = null;
+let lastPauseState = null;
+
+function fmt(s) {
+  s = Math.max(0, Math.floor(s || 0));
+  const m = Math.floor(s / 60), r = s % 60;
+  return m + ':' + String(r).padStart(2, '0');
+}
+
+async function update() {
+  try {
+    const res = await fetch('/api/status');
+    const data = await res.json();
+    const t = data.track || {};
+    const trackEl = document.getElementById('track');
+    const artistEl = document.getElementById('artist');
+    const card = document.getElementById('card');
+
+    const isStation = !!t.is_station;
+    document.getElementById('badge').textContent = isStation
+      ? (t.title || 'РАДІО').toUpperCase()
+      : 'ETS2 RADIO DJ';
+    if (t.title && trackEl.textContent !== t.title) {
+      trackEl.textContent = t.title;
+      trackEl.classList.remove('track-changed');
+      void trackEl.offsetWidth; // рестарт анимации
+      trackEl.classList.add('track-changed');
+    }
+    artistEl.textContent = t.artist || '';
+
+    const cover = document.getElementById('cover');
+    if (t.thumbnail) {
+      if (cover.src !== t.thumbnail) cover.src = t.thumbnail;
+      cover.classList.remove('placeholder');
+    }
+
+    card.classList.toggle('paused', !!t.is_paused);
+    if (!!t.is_paused !== lastPauseState) lastPauseState = !!t.is_paused;
+
+    const row = document.getElementById('progressRow');
+    if (isStation || t.is_paused) {
+      row.style.visibility = isStation ? 'hidden' : 'visible';
+    }
+    if (!isStation) {
+      const dur = t.duration || 0;
+      const cur = t.current_time || 0;
+      document.getElementById('curTime').textContent = fmt(cur);
+      document.getElementById('durTime').textContent = dur ? fmt(dur) : '';
+      document.getElementById('fill').style.width = dur
+        ? Math.min(100, (cur / dur) * 100) + '%'
+        : '0%';
+    }
+    lastVideoId = t.video_id || null;
+  } catch (e) {
+    document.getElementById('track').textContent = 'Сервер недоступен';
+    document.getElementById('artist').textContent = '';
+  }
+}
+
+const wantTele = params.get('tele') === '1' || params.get('tele') === 'auto';
+const teleRow = document.getElementById('teleRow');
+let teleVisible = false;
+
+async function updateTele() {
+  if (!wantTele) return;
+  try {
+    const res = await fetch('/api/telemetry');
+    const t = await res.json();
+    if (t.connected) {
+      if (!teleVisible) { teleVisible = true; teleRow.classList.add('show'); }
+      document.getElementById('teleSpeed').textContent = Math.round(t.speed_kmh || 0);
+      document.getElementById('teleGear').textContent = t.gear === 0 ? 'N' : (t.gear < 0 ? 'R' + Math.abs(t.gear) : t.gear);
+      document.getElementById('teleFuel').textContent = t.fuel_pct ?? '—';
+      document.getElementById('telePaused').style.display = t.paused ? '' : 'none';
+    } else if (teleVisible) {
+      teleVisible = false;
+      teleRow.classList.remove('show');
+    }
+  } catch (e) {}
+}
+
+update();
+setInterval(update, 1000);
+if (wantTele) setInterval(updateTele, 1000);
+</script>
+</body>
+</html>

@@ -1,0 +1,45 @@
+# --- Приватные данные (токены, куки, профили) ---
+config.json
+token_*_oauth.json
+session_*.json
+browser.json
+test_cookies.txt
+profiles.json
+favorites.json
+history.json
+playlists.json
+active_profile.txt
+ananasov_quick_picks.json
+stations.json
+
+# --- Генерируется сервером ---
+cache/
+ets2_radio_cache/
+ffmpeg_last.log
+
+# --- Мусор разработки ---
+_*.log
+_*.json
+*.bak
+*.pyc
+__pycache__/
+*.tmp
+
+# --- Посторонние проекты в этой папке ---
+createmars-site/
+createmars-deploy/
+XboxGameBarSamples/
+package.json
+
+# --- Виджет: артефакты сборки ---
+RadioWidget/bin/
+RadioWidget/obj/
+RadioWidget/AppPackages/RadioWidget_*_Test/
+RadioWidget/.vs/
+.vs/
+.zcode/
+
+# --- Локальные бэкапы и dev-скрипты ---
+backups/
+_*.ps1
+install_radio.exe
