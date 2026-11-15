@@ -124,7 +124,7 @@ html, body {
   <div class="overlay-card" id="card">
     <img class="cover" id="cover" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="">
     <div class="meta">
-      <div class="badge" id="badge">ETS2 RADIO DJ</div>
+      <div class="badge" id="badge">СЕЙЧАС ИГРАЕТ</div>
       <div class="track" id="track">…</div>
       <div class="artist" id="artist">…</div>
       <div class="progress-row" id="progressRow">
@@ -166,8 +166,8 @@ async function update() {
     const isStation = !!t.is_station;
     card.classList.toggle('station', isStation);
     document.getElementById('badge').textContent = isStation
-      ? 'РАДИО: ' + (t.artist || t.status || 'LIVE').toUpperCase()
-      : 'ETS2 RADIO DJ';
+      ? 'СЕЙЧАС В ЭФИРЕ'
+      : 'СЕЙЧАС ИГРАЕТ';
     if (t.title && trackEl.textContent !== t.title) {
       trackEl.textContent = t.title;
       trackEl.classList.remove('track-changed');
