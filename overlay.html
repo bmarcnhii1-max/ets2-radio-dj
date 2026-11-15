@@ -106,25 +106,6 @@ html, body {
 /* Прячем фон карточки, если transparent=0 не задан — по умолчанию с подложкой */
 .nobg .overlay-card { background: transparent; backdrop-filter: none; }
 
-/* Телеметрия */
-.tele-row {
-  display: flex;
-  align-items: baseline;
-  gap: 14px;
-  margin-top: 10px;
-  display: none;
-}
-.tele-row.show { display: flex; }
-.tele-speed {
-  font-size: 30px;
-  font-weight: 800;
-  font-family: 'Consolas', monospace;
-  color: var(--accent);
-  line-height: 1;
-}
-.tele-speed small { font-size: 11px; color: rgba(255,255,255,0.65); font-weight: 400; }
-.tele-extra { font-size: 12px; color: rgba(255,255,255,0.75); }
-.tele-extra b { color: #fff; }
 </style>
 </head>
 <body>
@@ -139,12 +120,6 @@ html, body {
         <span class="time" id="curTime">0:00</span>
         <div class="progress"><div class="progress-fill" id="fill"></div></div>
         <span class="time" id="durTime">0:00</span>
-      </div>
-      <div class="tele-row" id="teleRow">
-        <span class="tele-speed"><span id="teleSpeed">0</span> <small>км/ч</small></span>
-        <span class="tele-extra">Передача: <b id="teleGear">—</b></span>
-        <span class="tele-extra">Топливо: <b id="teleFuel">—</b>%</span>
-        <span class="tele-extra" id="telePaused" style="color:#f5a623; display:none;">ПАУЗА ИГРЫ</span>
       </div>
     </div>
   </div>
@@ -220,31 +195,8 @@ async function update() {
   }
 }
 
-const wantTele = params.get('tele') === '1' || params.get('tele') === 'auto';
-const teleRow = document.getElementById('teleRow');
-let teleVisible = false;
-
-async function updateTele() {
-  if (!wantTele) return;
-  try {
-    const res = await fetch('/api/telemetry');
-    const t = await res.json();
-    if (t.connected) {
-      if (!teleVisible) { teleVisible = true; teleRow.classList.add('show'); }
-      document.getElementById('teleSpeed').textContent = Math.round(t.speed_kmh || 0);
-      document.getElementById('teleGear').textContent = t.gear === 0 ? 'N' : (t.gear < 0 ? 'R' + Math.abs(t.gear) : t.gear);
-      document.getElementById('teleFuel').textContent = t.fuel_pct ?? '—';
-      document.getElementById('telePaused').style.display = t.paused ? '' : 'none';
-    } else if (teleVisible) {
-      teleVisible = false;
-      teleRow.classList.remove('show');
-    }
-  } catch (e) {}
-}
-
 update();
 setInterval(update, 1000);
-if (wantTele) setInterval(updateTele, 1000);
 </script>
 </body>
 </html>

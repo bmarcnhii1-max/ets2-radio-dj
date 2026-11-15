@@ -222,16 +222,6 @@
                             </StackPanel>
                         </Grid>
                     </Border>
-                    <Border x:Name="TeleCard" Padding="10,6" CornerRadius="10" Background="#FF181818" BorderBrush="#22FFFFFF" BorderThickness="1" Margin="0,7,0,0" Visibility="Collapsed">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock x:Name="TeleSpeedText" Text="0" FontSize="22" FontFamily="Consolas" FontWeight="Bold" Foreground="#FF1DB954"/>
-                            <TextBlock Text=" км/ч" FontSize="10" Foreground="#FFC4C8D0" VerticalAlignment="Bottom" Margin="2,0,12,3"/>
-                            <TextBlock x:Name="TeleGearText" Text="N" FontSize="12" Foreground="#FFFFFFFF" VerticalAlignment="Center"/>
-                            <TextBlock Text=" топл. " FontSize="9" Foreground="#FF7A7F8A" VerticalAlignment="Center" Margin="8,0,0,0"/>
-                            <TextBlock x:Name="TeleFuelText" Text="—" FontSize="11" Foreground="#FFFFFFFF" VerticalAlignment="Center"/>
-                            <TextBlock x:Name="TelePausedText" Text="ПАУЗА" FontSize="9" Foreground="#FFF5A623" VerticalAlignment="Center" Margin="10,0,0,0" Visibility="Collapsed"/>
-                        </StackPanel>
-                    </Border>
                     <ScrollViewer MaxHeight="420" Margin="0,7,0,0" VerticalScrollBarVisibility="Auto">
                         <StackPanel x:Name="StationsListPanel"/>
                     </ScrollViewer>

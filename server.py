@@ -74,7 +74,6 @@ app_config = {
     "volume_boost": "1.0",
     "discord_rpc": False,
     "cache_enabled": False,  # стрим напрямую без записи на диск
-    "auto_pause_game": True  # радио паузится при паузе в игре (ETS2/ATS телеметрия)
 }
 
 if os.path.exists(CONFIG_FILE):
@@ -1453,33 +1452,6 @@ def cache_watchdog():
         except Exception as e:
             print("[ERROR] Ошибка автоочистки кеша:", e)
 
-game_paused_by_radio = False  # радио само поставило паузу из-за паузы игры
-
-def game_pause_watchdog():
-    """Пауза радио при паузе в игре: если телеметрия говорит paused и
-    auto_pause_game включён — тишину; отпустили — продолжаем. Ручная пауза
-    пользователя не трогается (she помечается, кто поставил паузу)."""
-    global game_paused_by_radio
-    while True:
-        time.sleep(2)
-        try:
-            tele = telemetry_cache.get("data") or {}
-            if not app_config.get("auto_pause_game", True) or not tele.get("connected"):
-                # связь с игрой пропала — снять нашу паузу, если она была
-                if game_paused_by_radio and current_track_info.get("is_paused"):
-                    current_track_info["is_paused"] = False
-                game_paused_by_radio = False
-                continue
-            game_paused = bool(tele.get("paused"))
-            currently_paused = current_track_info.get("is_paused", False)
-            if game_paused and not currently_paused:
-                current_track_info["is_paused"] = True
-                game_paused_by_radio = True
-            elif game_paused_by_radio and not game_paused and currently_paused:
-                current_track_info["is_paused"] = False
-                game_paused_by_radio = False
-        except Exception as e:
-            print("[ERROR] game_pause_watchdog:", e)
 
 load_profiles()
 load_history_store()
@@ -3726,42 +3698,6 @@ def lyrics_get():
         lyrics_cache[vid] = resp
     return jsonify({"ok": True, **resp})
 
-# --- ETS2 ТЕЛЕМЕТРИЯ (ets2-telemetry-server на 25555) ---
-
-telemetry_cache = {"t": 0.0, "data": {"connected": False}}
-telemetry_lock = threading.Lock()
-
-@app.route('/api/telemetry')
-def telemetry_get():
-    now = time.time()
-    with telemetry_lock:
-        if now - telemetry_cache["t"] < 1.0:
-            return jsonify(telemetry_cache["data"])
-    data = {"connected": False}
-    try:
-        r = requests.get("http://127.0.0.1:25555/api/ets2/telemetry.json", timeout=1.5)
-        if r.status_code == 200:
-            raw = r.json()
-            tele = raw.get("telemetry", {}) or {}
-            truck = raw.get("truck", {}) or {}
-            game = raw.get("game", {}) or {}
-            data = {
-                "connected": True,
-                "speed_kmh": round(abs(float(truck.get("speedKmh", 0) or 0)), 1),
-                "gear": truck.get("gear", 0),
-                "paused": bool(game.get("paused", False)),
-                "game": game.get("gameName") or "",
-                "truck": raw.get("truck", {}).get("truckName") or "",
-                "odometer_km": round(float(truck.get("odometer", 0) or 0), 1),
-                "fuel_pct": round(float(truck.get("fuelPercentage", 0) or 0), 1),
-                "location": (raw.get("navigation", {}) or {}).get("estimatedTimeMinutes", None)
-            }
-    except Exception:
-        pass
-    with telemetry_lock:
-        telemetry_cache["t"] = now
-        telemetry_cache["data"] = data
-    return jsonify(data)
 
 # --- ПРОПИСАНИЕ РАДИО В ETS2/ATS (live_streams.sii) ---
 
@@ -4199,8 +4135,6 @@ def update_config():
     cache_was = bool(app_config.get("cache_enabled", False))
     if "cache_enabled" in data:
         app_config["cache_enabled"] = bool(data["cache_enabled"])
-    if "auto_pause_game" in data:
-        app_config["auto_pause_game"] = bool(data["auto_pause_game"])
     if "discord_rpc" in data:
         app_config["discord_rpc"] = bool(data["discord_rpc"])
     save_config()
@@ -4388,7 +4322,6 @@ if __name__ == '__main__':
     threading.Thread(target=dj_thread, daemon=True).start()
     threading.Thread(target=auth_watchdog, daemon=True).start()
     threading.Thread(target=cache_watchdog, daemon=True).start()
-    threading.Thread(target=game_pause_watchdog, daemon=True).start()
     threading.Thread(target=discord_rpc_thread, daemon=True).start()
     radio_host = os.environ.get("RADIO_HOST", "127.0.0.1")
     if radio_host not in {"127.0.0.1", "localhost", "::1"} and os.environ.get("RADIO_ALLOW_LAN") != "1":

@@ -36,7 +36,6 @@ let vizCanvas = null;
 let vizRunning = false;
 
 /* Телеметрия */
-let telemetryActive = null;
 
 /* SVG-иконка из спрайта (определён в index.html) */
 function icon(name, cls = 'icon') {
@@ -1156,32 +1155,6 @@ async function stopStation() {
   }
 }
 
-/* ============ ТЕЛЕМЕТРИЯ ============ */
-
-async function pollTelemetry() {
-  const card = document.getElementById('telemetryCard');
-  if (!card) return;
-  try {
-    const res = await fetch('/api/telemetry');
-    const data = await res.json();
-    if (data.connected) {
-      if (telemetryActive !== true) { telemetryActive = true; card.style.display = 'block'; }
-      document.getElementById('teleSpeed').textContent = Math.round(data.speed_kmh || 0);
-      document.getElementById('teleGear').textContent = data.gear === 0 ? 'N' : (data.gear < 0 ? 'R' + Math.abs(data.gear) : data.gear);
-      document.getElementById('teleFuel').textContent = data.fuel_pct ?? '—';
-      document.getElementById('teleOdo').textContent = data.odometer_km ?? '—';
-      document.getElementById('telePaused').style.display = data.paused ? '' : 'none';
-    } else if (telemetryActive !== false) {
-      telemetryActive = false;
-      card.style.display = 'none';
-    }
-  } catch (e) {
-    if (telemetryActive !== false) {
-      telemetryActive = false;
-      card.style.display = 'none';
-    }
-  }
-}
 
 /* ============ СТАТУС ============ */
 
@@ -1328,10 +1301,6 @@ async function updateStatus() {
       const rpcToggle = document.getElementById('discordRpcToggle');
       if (rpcToggle && document.activeElement !== rpcToggle) {
         rpcToggle.checked = !!data.config.discord_rpc;
-      }
-      const apToggle = document.getElementById('autoPauseToggle');
-      if (apToggle && document.activeElement !== apToggle) {
-        apToggle.checked = data.config.auto_pause_game !== false;
       }
       const cacheOn = !!data.config.cache_enabled;
       const cacheToggleEl = document.getElementById('cacheToggle');
@@ -1617,12 +1586,11 @@ async function updateSettings() {
     const cache_limit = document.getElementById('settingLimit').value;
     const discord_rpc = document.getElementById('discordRpcToggle').checked;
     const cache_enabled = document.getElementById('cacheToggle').checked;
-    const auto_pause_game = document.getElementById('autoPauseToggle').checked;
 
     const res = await fetch('/api/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ bitrate, volume_boost, cache_limit, discord_rpc, cache_enabled, auto_pause_game })
+      body: JSON.stringify({ bitrate, volume_boost, cache_limit, discord_rpc, cache_enabled })
     });
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || 'Не удалось сохранить настройки');
@@ -1734,4 +1702,3 @@ updateStatus().then(() => {
   checkEts2Stream();
 });
 setInterval(updateStatus, 1000);
-setInterval(pollTelemetry, 1000);

@@ -294,35 +294,6 @@ namespace RadioWidget
         private async void Timer_Tick(object sender, object e)
         {
             await RefreshStatusAsync();
-            if (activeTab == "radio")
-            {
-                await RefreshTelemetryAsync();
-            }
-        }
-
-        private async System.Threading.Tasks.Task RefreshTelemetryAsync()
-        {
-            try
-            {
-                var resp = await http.GetAsync(new Uri(Api + "/api/telemetry"));
-                var json = await resp.Content.ReadAsStringAsync();
-                var obj = Windows.Data.Json.JsonObject.Parse(json);
-                if (!obj.GetNamedBoolean("connected", false))
-                {
-                    TeleCard.Visibility = Visibility.Collapsed;
-                    return;
-                }
-                TeleCard.Visibility = Visibility.Visible;
-                TeleSpeedText.Text = ((int)obj.GetNamedNumber("speed_kmh", 0)).ToString();
-                int gear = (int)obj.GetNamedNumber("gear", 0);
-                TeleGearText.Text = gear == 0 ? "N" : (gear < 0 ? "R" + Math.Abs(gear) : gear.ToString());
-                TeleFuelText.Text = ((int)obj.GetNamedNumber("fuel_pct", 0)).ToString() + "%";
-                TelePausedText.Visibility = obj.GetNamedBoolean("paused", false) ? Visibility.Visible : Visibility.Collapsed;
-            }
-            catch
-            {
-                TeleCard.Visibility = Visibility.Collapsed;
-            }
         }
 
         // ---------- ПОЛНАЯ ОЧЕРЕДЬ ----------

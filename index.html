@@ -234,20 +234,6 @@
       </div>
       <div id="stationsBox" class="chips-wrap"></div>
     </div>
-
-    <div class="card" id="telemetryCard" style="display:none;">
-      <div class="card-title"><svg class="icon icon-stroke"><use href="#i-truck"/></svg> Телеметрия ETS2</div>
-      <div class="telemetry-flex">
-        <div class="telemetry-speed"><span id="teleSpeed">0</span> <small>км/ч</small></div>
-        <div class="telemetry-meta">
-          <span>Передача: <b id="teleGear">—</b></span>
-          <span>Топливо: <b id="teleFuel">—</b>%</span>
-          <span>Пробег: <b id="teleOdo">—</b> км</span>
-          <span id="telePaused" style="color:var(--yellow); display:none;">ПАУЗА ИГРЫ</span>
-        </div>
-      </div>
-    </div>
-    <div class="card muted-note">Телеметрия появится, когда запущен ets2-telemetry-server (порт 25555) в игре.</div>
   </div>
 
   <!-- ВКЛАДКА: ПОИСК -->
@@ -380,16 +366,6 @@
 
     <div class="section-divider" style="margin-top:14px;">
       <div class="switch-row">
-        <div>
-          <b>Пауза радио при паузе в игре</b>
-          <div class="muted" style="font-size:11px;">Требуется ets2-telemetry-server. Когда ты стоишь в меню — тишина, поехали — музыка продолжается.</div>
-        </div>
-        <label class="switch">
-          <input type="checkbox" id="autoPauseToggle" onchange="updateSettings()">
-          <span class="switch-slider"></span>
-        </label>
-      </div>
-      <div class="switch-row" style="margin-top:8px;">
         <div>
           <b>Discord Rich Presence</b>
           <div class="muted" style="font-size:11px;">Показывать текущий трек в статусе Discord (нужен pip install pypresence)</div>
