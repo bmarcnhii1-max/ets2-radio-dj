@@ -165,6 +165,12 @@ function renderPicksPage() {
       </div>
     `;
     card.appendChild(rest);
+    if (p.reason) {
+      const tag = document.createElement('div');
+      tag.className = 'pick-reason';
+      tag.textContent = p.reason;
+      card.appendChild(tag);
+    }
     if (p.playlistId) {
       const tag = document.createElement('div');
       tag.className = 'pick-album-tag';
@@ -201,6 +207,13 @@ async function loadQuickPicks(force = false) {
       document.getElementById('ytmAvatarInitial').textContent = data.user_name.charAt(0).toUpperCase();
     }
     if (data.fallback && data.message) showToast(data.message);
+
+    const tasteLine = document.getElementById('tasteLine');
+    if (tasteLine) {
+      const loved = (data.taste && data.taste.loved) || [];
+      tasteLine.textContent = loved.length ? `Нравится: ${loved.join(' · ')}` : '';
+      tasteLine.style.display = loved.length ? '' : 'none';
+    }
 
     if (allLoadedPicks.length === 0) {
       grid.innerHTML = `<div style="grid-column: 1 / -1; text-align: center; color: var(--text-muted); padding: 24px;">${esc(data.message || 'Нет треков для отображения.')}</div>`;

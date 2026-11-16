@@ -457,6 +457,31 @@ code {
 }
 
 .carousel-dots { display: flex; justify-content: center; gap: 6px; margin-top: 12px; }
+
+/* Строка вкусового профиля: «Нравится: …» над сеткой */
+.taste-line {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: -4px 0 10px;
+  padding-left: 2px;
+  letter-spacing: 0.2px;
+}
+.taste-line::before { content: '◆ '; color: var(--primary); font-size: 9px; }
+
+/* Чип «почему рекомендую» на карточке подборки */
+.pick-reason {
+  position: absolute; top: 6px; right: 6px;
+  max-width: 74%;
+  font-size: 8.5px; font-family: 'JetBrains Mono', monospace;
+  color: #8ee7b4;
+  background: rgba(5, 8, 12, 0.74);
+  border: 1px solid rgba(29, 185, 84, 0.28);
+  padding: 2px 7px; border-radius: 9px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  backdrop-filter: blur(4px);
+  pointer-events: none;
+  z-index: 2;
+}
 .carousel-dot {
   width: 7px; height: 7px; border-radius: 50%;
   background: var(--surface-3);

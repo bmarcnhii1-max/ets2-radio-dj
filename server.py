@@ -663,6 +663,12 @@ def fill_queue_after_dismissal(generation, seed_vid, seed_artist):
         print("[QUEUE] Не удалось подобрать замену:", ex)
 
     random.shuffle(candidates)
+    # Слабый пересорт по вкусовому профилю: свои артисты — вперёд,
+    # порядок внутри одинаковых весов остаётся перемешанным
+    try:
+        candidates.sort(key=lambda p: -score_candidate_pick(active_profile_name, p)[0])
+    except Exception:
+        pass
     added = []
     with state_lock:
         if generation != playback_generation:
@@ -1297,6 +1303,126 @@ def set_favorite(video_id, liked, title="", artist="", thumbnail="", album="", p
         atomic_json_dump(FAVORITES_FILE, favorites_store)
         return bool(liked), [dict(item) for item in filtered]
 
+# --- ВКУСОВОЙ ПРОФИЛЬ АККАУНТА (taste.json) ---
+# Живая модель вкуса: лайк/дослушивание поднимают вес артиста, ранний скип
+# и дизлайк роняют. Кандидаты рекомендаций сортируются по этим весам.
+# У каждого аккаунта свой профиль — вкусы не смешиваются.
+
+TASTE_FILE = resolve_path("taste.json")
+taste_lock = threading.RLock()
+taste_store = {"profiles": {}}
+
+def _norm_artist_key(name):
+    s = str(name or "").strip().lower()
+    s = re.sub(r'\s*[-–—]\s*topic$', '', s)
+    s = re.sub(r'\s*[([](feat|ft\b|remix|cover)[^)\]]*[)\]]?$', '', s)
+    s = re.sub(r'\s+', ' ', s).strip(' ,')
+    return s
+
+def load_taste_store():
+    global taste_store
+    with taste_lock:
+        if os.path.exists(TASTE_FILE):
+            try:
+                with open(TASTE_FILE, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if isinstance(data, dict) and isinstance(data.get("profiles"), dict):
+                    taste_store = {"profiles": data["profiles"]}
+            except Exception as e:
+                print("[Taste] Error reading taste.json:", e)
+                taste_store = {"profiles": {}}
+        # Мягкое затухание: за сутки без событий вкус слабеет на 15% —
+        # модель следует за пользователем, а не застывает навсегда
+        now = time.time()
+        for prof in taste_store.get("profiles", {}).values():
+            if not isinstance(prof, dict):
+                continue
+            if now - (prof.get("updated") or 0) > 86400:
+                prof["artists"] = {k: round(max(-12.0, min(12.0, v * 0.85)), 2)
+                                   for k, v in (prof.get("artists") or {}).items()}
+                prof["updated"] = now
+
+def save_taste_store():
+    with taste_lock:
+        atomic_json_dump(TASTE_FILE, taste_store)
+
+def bump_artist_affinity(profile_name, artist, delta):
+    key = _norm_artist_key(artist)
+    if not key:
+        return
+    with taste_lock:
+        prof = taste_store.setdefault("profiles", {}).setdefault(profile_name, {"artists": {}, "updated": 0})
+        artists = prof.setdefault("artists", {})
+        val = max(-12.0, min(12.0, artists.get(key, 0.0) + float(delta)))
+        artists[key] = round(val, 2)
+        prof["updated"] = time.time()
+        save_taste_store()
+
+def get_artist_affinity(profile_name, artist):
+    key = _norm_artist_key(artist)
+    if not key:
+        return 0.0
+    with taste_lock:
+        prof = taste_store.get("profiles", {}).get(profile_name) or {}
+        return float((prof.get("artists") or {}).get(key, 0.0))
+
+def score_candidate_pick(profile_name, pick):
+    """Оценка кандидата вкусовым профилем: (score, reason).
+    reason — подпись «почему рекомендую» для карточки в UI."""
+    artist = str(pick.get("artist") or "").strip()
+    key = _norm_artist_key(artist)
+    if not key:
+        return 1.2, "Новое для тебя"
+    aff = get_artist_affinity(profile_name, artist)
+    score = aff * 1.2
+    reason = ""
+    if aff >= 2.5:
+        score += 1.0
+        reason = f"Ты часто слушаешь {artist}"
+    elif aff >= 1.0:
+        reason = f"Нравится: {artist}"
+    elif aff <= -3.0:
+        reason = f"Раньше скипал {artist}"
+    if not reason:
+        # Артист неизвестен — небольшой бонус на исследование нового
+        reason = "Новое для тебя"
+        score += 0.8
+    return score, reason
+
+def get_taste_summary(profile_name, loved_n=4, skipped_n=3):
+    with taste_lock:
+        artists = dict((taste_store.get("profiles", {}).get(profile_name) or {}).get("artists") or {})
+    loved = sorted(((k, v) for k, v in artists.items() if v >= 1.0), key=lambda x: -x[1])[:loved_n]
+    skipped = sorted(((k, v) for k, v in artists.items() if v <= -2.0), key=lambda x: x[1])[:skipped_n]
+    return {"loved": [k for k, _ in loved], "skipped": [k for k, _ in skipped]}
+
+def taste_on_skip():
+    """Сигнал «дальше» с текущего трека: почти мгновенный скип роняет артиста,
+    дослушивание до конца перед нажатием — поднимает. Станции вкус не меняют."""
+    try:
+        with state_lock:
+            info = dict(current_track_info)
+        if info.get("is_station"):
+            return
+        artist = info.get("artist") or ""
+        if not artist.strip():
+            return
+        dur = info.get("duration") or 0
+        cur = info.get("current_time") or 0
+        try:
+            dur, cur = int(dur), int(cur)
+        except (TypeError, ValueError):
+            dur, cur = 0, 0
+        if dur > 30 and cur >= dur * 0.8:
+            delta = 1.5   # дослушал и всё равно дальше — трек «свой»
+        elif dur > 30 and cur < dur * 0.15:
+            delta = -2.5  # выключил почти сразу
+        else:
+            delta = -0.5  # нейтральный скип
+        bump_artist_affinity(active_profile_name, artist, delta)
+    except Exception:
+        pass
+
 def set_active_yt_instance(name):
     global yt, active_profile_name, active_account_info, is_active_authenticated, auth_fail_streak, playback_profile_name
     name = str(name).strip().lstrip('\ufeff')
@@ -1473,6 +1599,7 @@ load_profiles()
 load_history_store()
 load_favorites_store()
 load_playlists_store()
+load_taste_store()
 
 def parse_input_to_track_queue(query_or_url, meta_hint=None):
     global current_playing_item
@@ -2044,6 +2171,7 @@ def dj_thread():
                             def _push_r(rvid, rtitle, rartist, rthumb, tag, dur=None):
                                 if generation != playback_generation:
                                     return False
+                                akey = _norm_artist_key(rartist)
                                 with state_lock:
                                     blocked = rvid in dismissed_vids
                                 if (not rvid or rvid in known
@@ -2060,6 +2188,10 @@ def dj_thread():
                                         return False
                                     if any(t.get("videoId") == rvid for t in track_queue_list):
                                         return False
+                                    # Не даём 3 трека одного артиста подряд в хвосте очереди
+                                    last_two = [_norm_artist_key(t.get("artist") or "") for t in track_queue_list[-2:]]
+                                    if akey and len(last_two) == 2 and all(a == akey for a in last_two):
+                                        return False
                                     track_queue_list.append({
                                         "videoId": rvid, "title": rtitle,
                                         "artist": rartist, "album": tag,
@@ -2068,14 +2200,23 @@ def dj_thread():
                                 return True
 
                             def _feed_radio(seed):
-                                n = 0
                                 radio = safe_get_watch_playlist(seed, radio=True)
+                                scored = []
                                 for r in radio.get("tracks", []):
-                                    if _push_r(r.get("videoId"), r.get("title", ""),
-                                               (r.get("artists", [{}])[0].get("name", "") if r.get("artists") else ""),
-                                               (r.get("thumbnails", [{}]) or [{}])[-1].get("url", ""),
+                                    p = format_track_pick(r)
+                                    if p and not is_generic_chart_track(p.get("title") or "", p.get("artist") or "") \
+                                            and not is_non_music_video(p.get("title") or "", p.get("artist") or ""):
+                                        # Вкусовой профиль решает, кто попадёт в очередь первым
+                                        s, _ = score_candidate_pick(active_profile_name, p)
+                                        scored.append((s + random.uniform(0.0, 0.5), p))
+                                scored.sort(key=lambda x: -x[0])
+                                n = 0
+                                for _, p in scored:
+                                    if _push_r(p.get("videoId"), p.get("title", ""),
+                                               p.get("artist", ""),
+                                               p.get("thumbnail", ""),
                                                "Рекомендации (Радио)",
-                                               dur=r.get("duration_seconds")):
+                                               dur=None):
                                         n += 1
                                     with state_lock:
                                         full = len(track_queue_list) >= 12
@@ -2276,6 +2417,16 @@ def dj_thread():
                                 # скорее всего протухший URL из кеша: сбрасываем его
                                 if str(input_source).startswith('http') and time.time() - ff_start < 3:
                                     stream_url_cache.pop(vid, None)
+                                # Дослушивание до конца — честный «+» вкусовому профилю
+                                try:
+                                    _dur = int(current_track_info.get("duration") or 0)
+                                    _cur = int(current_track_info.get("current_time") or 0)
+                                    if (current_track_info.get("duration_known") and _dur > 30
+                                            and not current_track_info.get("is_station")
+                                            and _cur >= _dur * 0.8):
+                                        bump_artist_affinity(active_profile_name, current_track_info.get("artist") or "", 2.0)
+                                except Exception:
+                                    pass
                                 # Мгновенная смерть (<1с) — трек даже не начал играть:
                                 # считаем полосой сбоев, здоровое воспроизведение её сбрасывает
                                 if elapsed < 1.0:
@@ -2987,7 +3138,11 @@ def build_home_picks(base_picks, seed_vids, exclude_recent=True):
         seen.add(key)
         if p.get("videoId"):
             meta_cache[p["videoId"]] = p
-        picks.append(dict(p))
+        entry = dict(p)
+        if p.get("videoId"):
+            _, reason = score_candidate_pick(active_profile_name, p)
+            entry["reason"] = reason
+        picks.append(entry)
         artist = (p.get("artist") or "").strip().lower()
         if artist:
             artist_run[artist] = artist_run.get(artist, 0) + 1
@@ -3016,39 +3171,42 @@ def build_home_picks(base_picks, seed_vids, exclude_recent=True):
 
     seed_waves = [w for w in seed_waves if w]
 
-    # Round-robin між сидами + різноманіття артистів
-    deferred = []  # треки, відкладені через ліміт артиста — повертаються пізніше
-    while len(picks) < 27 and (seed_waves or deferred):
-        added_any = False
-        for wave in list(seed_waves):
-            while wave:
-                candidate = wave.pop(0)
-                cid = candidate.get("videoId")
-                if not cid or cid in seen:
-                    continue
-                if not _can_append(candidate):
-                    deferred.append(candidate)
-                    continue
-                seen.add(cid)
-                meta_cache[cid] = candidate
-                _append(candidate)
-                added_any = True
-                break
-            if len(picks) >= 27:
-                break
-        # повертаємо відкладені, коли інших варіантів немає
-        if not added_any:
-            while deferred and len(picks) < 27:
-                candidate = deferred.pop(0)
-                cid = candidate.get("videoId")
-                if cid and cid not in seen:
-                    seen.add(cid)
-                    meta_cache[cid] = candidate
-                    _append(candidate)
-                    added_any = True
-                    break
-        if not added_any:
+    # Скоринг всех кандидатов вкусовым профилем аккаунта: любимые артисты и
+    # разумные новинки поднимаются, отскыпанные уходят на дно.
+    scored = []
+    for wave in seed_waves:
+        for cand in wave:
+            cid = cand.get("videoId")
+            if not cid or cid in seen or cid in recent_vids:
+                continue
+            s, reason = score_candidate_pick(active_profile_name, cand)
+            scored.append((s + random.uniform(0.0, 0.6), reason, cand))
+    scored.sort(key=lambda x: -x[0])
+
+    def _emit(cand, reason):
+        cid = cand.get("videoId")
+        if not cid or cid in seen or len(picks) >= 27:
+            return False
+        seen.add(cid)
+        meta_cache[cid] = cand
+        entry = dict(cand)
+        if reason:
+            entry["reason"] = reason
+        _append(entry)
+        return True
+
+    # Проход 1: разнообразие артистов (макс. 2 подряд, как раньше)
+    for _, reason, cand in scored:
+        if len(picks) >= 27:
             break
+        if not _can_append(cand):
+            continue
+        _emit(cand, reason)
+    # Проход 2: добор, если разнообразие проредило список
+    for _, reason, cand in scored:
+        if len(picks) >= 27:
+            break
+        _emit(cand, reason)
 
     # Якщо ще є вільне місце (менше 27 треків) — добираємо з перевіреної бази
     if len(picks) < 27:
@@ -3253,6 +3411,7 @@ def get_quick_picks():
                 "mode": mode,
                 "cached": True,
                 "fallback": cached_fallback,
+                "taste": get_taste_summary(active_profile_name),
                 "user_name": active_account_info.get("accountName", active_profile_name) if active_account_info else active_profile_name,
                 "is_auth": is_active_authenticated
             })
@@ -3389,6 +3548,7 @@ def get_quick_picks():
         "cached": False,
         "fallback": fallback_used,
         "message": fallback_msg or None,
+        "taste": get_taste_summary(active_profile_name),
         "user_name": active_account_info.get("accountName", active_profile_name) if active_account_info else active_profile_name,
         "is_auth": is_active_authenticated
     })
@@ -3437,6 +3597,13 @@ def toggle_favorite_endpoint():
         data.get("thumbnail", current_track_info.get("thumbnail", "")),
         data.get("album", current_track_info.get("album", ""))
     )
+    # Лайк/анлайк двигает вкусовой профиль
+    try:
+        fav_artist = data.get("artist") or current_track_info.get("artist") or ""
+        if fav_artist and not current_track_info.get("is_station"):
+            bump_artist_affinity(active_profile_name, fav_artist, 3.0 if added else -1.0)
+    except Exception:
+        pass
     return jsonify({"ok": True, "favorited": added, "video_id": video_id, "favorites": favorites})
 
 @app.route('/api/like', methods=['POST'])
@@ -3472,6 +3639,13 @@ def account_like():
         data.get("thumbnail", current_track_info.get("thumbnail", "")),
         data.get("album", current_track_info.get("album", ""))
     )
+    # Лайк в аккаунт — сильный положительный сигнал вкусу
+    try:
+        like_artist = data.get("artist") or current_track_info.get("artist") or ""
+        if like_artist and not current_track_info.get("is_station"):
+            bump_artist_affinity(active_profile_name, like_artist, 3.0 if target else -1.0)
+    except Exception:
+        pass
     result = {
         "ok": True,
         "liked": liked,
@@ -3909,6 +4083,14 @@ def remove_queue_track():
             if not video_id:
                 return jsonify({"ok": False, "error": "Нет текущего трека"}), 404
             dismissed_vids.add(video_id)
+        # Дизлайк — самый громкий отрицательный сигнал вкусу
+        try:
+            dis_artist = current_track_info.get("artist") or ""
+            if dis_artist and not current_track_info.get("is_station"):
+                bump_artist_affinity(active_profile_name, dis_artist, -5.0)
+            clear_picks_cache()  # «Мой Вайб» сразу пересоберётся без него
+        except Exception:
+            pass
         skip_event.set()
         flush_listeners()
         kill_current_proc()
@@ -3982,12 +4164,14 @@ def player_control():
         })
 
     elif action == "skip":
+        taste_on_skip()
         skip_event.set()
         flush_listeners()
         kill_current_proc()
         return jsonify({"ok": True})
 
     elif action in ("previous", "prev"):
+        taste_on_skip()
         with state_lock:
             if played_tracks_history:
                 prev_item = played_tracks_history.pop()
