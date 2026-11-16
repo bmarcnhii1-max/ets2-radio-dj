@@ -208,6 +208,10 @@ namespace RadioWidget
                 currentTime = (int)track.GetNamedNumber("current_time", 0);
                 if (trackIsStation) duration = 0;
 
+                // На живой станции прогресс-бар бессмыслен — прячем целиком
+                // (иначе Value.Clamp к Maximum=1 рисует вечно полную полосу)
+                SeekBorder.Visibility = trackIsStation ? Visibility.Collapsed : Visibility.Visible;
+
                 if (trackIsStation)
                 {
                     CurrentTimeText.Text = "эфир";

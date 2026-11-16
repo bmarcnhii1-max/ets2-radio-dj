@@ -503,7 +503,7 @@ def get_stations():
 def play_station_loop(station, restarts=0):
     """Крутит реальный интернет-стрим через тот же пайп /radio.mp3.
     Блокирует поток (вызывается из dj_thread). Очередь YouTube не трогает."""
-    global station_state
+    global station_state, current_proc
     bitrate = app_config.get("bitrate", "128k")
     boost = app_config.get("volume_boost", "1.0")
     ff_log_path = os.path.join(CACHE_DIR, 'ffmpeg_last.log')
@@ -542,13 +542,12 @@ def play_station_loop(station, restarts=0):
         if seek_event.is_set():
             seek_event.clear()
         if current_track_info.get("is_paused"):
-            # тишина темпом битрейта, как у треков
+            # тишина темпом битрейта, как у треков (~1 сек за итерацию)
             p_start = time.time()
             while current_track_info.get("is_paused"):
                 if skip_event.is_set() or not cmd_queue.empty():
                     break
-                kbps = int(re.sub(r'\D', '', str(bitrate)) or 128)
-                push_chunk(MP3_SILENCE_FRAME * max(256, int(kbps * 128 / 8)))
+                push_chunk(MP3_SILENCE_FRAME * 38)
                 time.sleep(1.0)
             # сдвигаем старт эфира на длину паузы, чтобы current_time не скакал
             ff_start += time.time() - p_start
@@ -565,6 +564,7 @@ def play_station_loop(station, restarts=0):
                 break
             kill_current_proc()
             def _station_fail(reason):
+                global station_state
                 with state_lock:
                     if station_state and station_state.get("id") == station.get("id"):
                         station_state = None
@@ -2244,8 +2244,6 @@ def dj_thread():
                                         break
                                     # Тишина темпом битрейта (а не 4КБ каждые 0.1с
                                     # в лоб) — очереди слушателей не переполняются
-                                    kbps = int(re.sub(r'\D', '', str(bitrate)) or 128)
-                                    pause_chunk = max(256, int(kbps * 128 / 8))
                                     push_chunk(MP3_SILENCE_FRAME * 38)
                                     time.sleep(1.0)
                                 start_play_time += (time.time() - p_start)

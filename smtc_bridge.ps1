@@ -120,11 +120,15 @@ while ($true) {
             Write-Output "[SMTC] Track: $title - $($track.artist)"
         }
 
-        $timeline = New-Object Windows.Media.SystemMediaTransportControlsTimelineProperties
-        $timeline.StartTime = [TimeSpan]::Zero
-        $timeline.Position = [TimeSpan]::FromSeconds([int]$track.current_time)
-        $timeline.EndTime = [TimeSpan]::FromSeconds([int]$track.duration)
-        $smtc.UpdateTimelineProperties($timeline)
+        # Таймлайн только для треков с известной длительностью:
+        # у радиостанции duration=0, и EndTime<Position ломает шкалу в Game Bar
+        if ([int]$track.duration -gt 0) {
+            $timeline = New-Object Windows.Media.SystemMediaTransportControlsTimelineProperties
+            $timeline.StartTime = [TimeSpan]::Zero
+            $timeline.Position = [TimeSpan]::FromSeconds([int]$track.current_time)
+            $timeline.EndTime = [TimeSpan]::FromSeconds([int]$track.duration)
+            $smtc.UpdateTimelineProperties($timeline)
+        }
 
     } catch {
         $smtc.PlaybackStatus = [Windows.Media.MediaPlaybackStatus]::Stopped

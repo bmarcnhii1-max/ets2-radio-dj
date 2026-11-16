@@ -165,6 +165,7 @@ async function update() {
     const isStation = !!t.is_station;
     const isPaused = !!t.is_paused;
     card.classList.toggle('station', isStation);
+    card.classList.toggle('paused', isPaused);
     document.getElementById('badge').textContent = isPaused ? 'ПАУЗА'
       : isStation ? 'СЕЙЧАС В ЭФИРЕ'
       : 'СЕЙЧАС ИГРАЕТ';

@@ -86,7 +86,7 @@
                     </Border>
 
                     <!-- SEEK -->
-                    <Border Margin="0,7,0,0" Padding="10,6" CornerRadius="10" Background="#FF181818" BorderBrush="#22FFFFFF" BorderThickness="1">
+                    <Border x:Name="SeekBorder" Margin="0,7,0,0" Padding="10,6" CornerRadius="10" Background="#FF181818" BorderBrush="#22FFFFFF" BorderThickness="1">
                         <StackPanel>
                             <Grid x:Name="SeekVisual" Height="22" SizeChanged="SeekVisual_SizeChanged">
                                 <!-- Ручная полоса прогресса: новый UWP ProgressBar
