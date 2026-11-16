@@ -331,7 +331,7 @@ async function sendTrack(isAlbumMode = false) {
   } catch (e) {
     pendingTrack = null;
     document.getElementById('sourceBadge').textContent = '● ОШИБКА';
-    throw e;
+    showToast(e.message || 'Ошибка запуска трека');
   }
   updateStatus();
 }

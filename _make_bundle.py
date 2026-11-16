@@ -1,7 +1,7 @@
 import zipfile, os
 
 files = [
-    'server.py', 'index.html', 'overlay.html', 'tablet.html',
+    'server.py', 'index.html', 'overlay.html',
     'requirements.txt', 'smtc_bridge.ps1', 'start_radio.bat',
     'README.md', 'LICENSE',
     'static/style.css', 'static/app.js',
