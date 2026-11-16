@@ -1798,6 +1798,11 @@ def get_direct_stream_url(vid):
 def dj_thread():
     global current_proc, target_seek_time, upcoming_queue, radio_inflight, track_queue_list, current_playing_item, played_vids, playback_profile_name, station_state
 
+    # Подряд умершие в первые секунды ffmpeg-ы: если среда не даёт запускаться
+    # дочерним процессам (мёртвая консоль, антивирус), без паузы выгорает вся
+    # очередь и все треки улетают в played_vids за несколько секунд.
+    instant_fail_streak = 0
+
     while True:
         try:
             task = None
@@ -2270,6 +2275,12 @@ def dj_thread():
                                 # скорее всего протухший URL из кеша: сбрасываем его
                                 if str(input_source).startswith('http') and time.time() - ff_start < 3:
                                     stream_url_cache.pop(vid, None)
+                                # Мгновенная смерть (<1с) — трек даже не начал играть:
+                                # считаем полосой сбоев, здоровое воспроизведение её сбрасывает
+                                if elapsed < 1.0:
+                                    instant_fail_streak += 1
+                                else:
+                                    instant_fail_streak = 0
                                 break
 
                             if skip_event.is_set() or not cmd_queue.empty() or seek_event.is_set():
@@ -2290,6 +2301,14 @@ def dj_thread():
                             continue
                         else:
                             break
+
+                    # Полоса мгновенных смертей: не выжигаем очередь, ждём
+                    # (перезапуск сервера из start_radio.bat чинит мёртвую консоль)
+                    if instant_fail_streak >= 4:
+                        print(f"[DJ] {instant_fail_streak} треков подряд умерли мгновенно — "
+                              f"процессы не стартуют. Пауза 8с перед следующей попыткой.", flush=True)
+                        time.sleep(8.0)
+                        instant_fail_streak = 0
 
                     clean_old_cache(protect_vid=vid)
 
