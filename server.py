@@ -9,6 +9,7 @@ import collections
 import glob
 import hashlib
 import json
+import logging
 import os
 import queue
 import random
@@ -4380,6 +4381,10 @@ if __name__ == '__main__':
     threading.Thread(target=auth_watchdog, daemon=True).start()
     threading.Thread(target=cache_watchdog, daemon=True).start()
     threading.Thread(target=discord_rpc_thread, daemon=True).start()
+    # Тихие HTTP-логи: GET /api/status каждую секунду засорял консоль.
+    # Ошибки (500-ки, трейсбеки) остаются видимыми — уровень ERROR.
+    logging.getLogger("werkzeug").setLevel(logging.ERROR)
+    print("[OK] ETS2 Radio DJ: http://127.0.0.1:5000 — HTTP-логи запросов отключены (ошибки видны)", flush=True)
     radio_host = os.environ.get("RADIO_HOST", "127.0.0.1")
     if radio_host not in {"127.0.0.1", "localhost", "::1"} and os.environ.get("RADIO_ALLOW_LAN") != "1":
         print("[WARN] Сетевой доступ запрещён. Для включения задайте RADIO_ALLOW_LAN=1.")
