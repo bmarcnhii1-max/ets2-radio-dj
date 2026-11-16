@@ -2369,19 +2369,22 @@ def dj_thread():
 
                         while True:
                             if skip_event.is_set():
-                                print(f"[DEBUG] Break: skip_event for {vid}")
+                                print(f"[DEBUG] Break: skip_event for {vid}", flush=True)
                                 kill_current_proc()
                                 flush_listeners()
+                                push_chunk(MP3_SILENCE_FRAME * 10)
                                 break
                             if not cmd_queue.empty():
-                                print(f"[DEBUG] Break: cmd_queue not empty for {vid}")
+                                print(f"[DEBUG] Break: cmd_queue not empty for {vid}", flush=True)
                                 kill_current_proc()
                                 flush_listeners()
+                                push_chunk(MP3_SILENCE_FRAME * 10)
                                 break
                             if seek_event.is_set():
-                                print(f"[DEBUG] Break: seek_event for {vid}")
+                                print(f"[DEBUG] Break: seek_event for {vid}", flush=True)
                                 kill_current_proc()
                                 flush_listeners()
+                                push_chunk(MP3_SILENCE_FRAME * 10)
                                 break
 
                             if current_track_info["is_paused"]:
@@ -2447,9 +2450,14 @@ def dj_thread():
                         kill_current_proc()
 
                         if seek_event.is_set():
+                            print(f"[SEEK] пересборка ffmpeg на позиции {target_seek_time}", flush=True)
                             flush_listeners()
                             current_seek = target_seek_time
                             current_track_info["current_time"] = current_seek
+                            # тишина на время пересборки ffmpeg (~1с): декодер
+                            # в ETS2 не давится обрывом кадра и не пищит,
+                            # когда поток возобновляется
+                            push_chunk(MP3_SILENCE_FRAME * 38)
                             continue
                         else:
                             break
@@ -4351,6 +4359,32 @@ def delete_profile():
         return jsonify({"ok": True, "active": active_profile_name})
     return jsonify({"ok": False, "error": "Не найдено"}), 404
 
+# --- Плавная регулировка громкости на ходу ---
+# Виджет при перетаскивании ползунка шлёт volume_boost каждые ~400 мс.
+# Применение требует перезапуска ffmpeg (gain вшит в фильтр при старте) —
+# без дебаунса каждое движение ползунка = щель в эфире и писк от обрыва
+# MP3-кадра. Таймер применяет ПОСЛЕДНЕЕ значение через паузу после
+# последнего изменения: одна чистая пересборка вместо серии.
+boost_restart_timer = None
+boost_restart_lock = threading.Lock()
+
+def _apply_boost_restart():
+    global target_seek_time
+    try:
+        if current_track_info.get("is_station"):
+            return
+        if not current_proc:
+            return
+        try:
+            cur = int(current_track_info.get("current_time") or 0)
+        except (TypeError, ValueError):
+            cur = 0
+        with state_lock:
+            target_seek_time = max(0, cur)
+        seek_event.set()
+    except Exception:
+        pass
+
 @app.route('/api/config', methods=['POST'])
 def update_config():
     data = request.get_json(silent=True) or {}
@@ -4383,17 +4417,17 @@ def update_config():
     clean_old_cache(protect_vid=current_track_info.get("video_id"))
     status_cache.pop("stats", None)  # UI сразу увидит эффект очистки
 
-    # Мгновенное применение громкости/бирейта: перезапускаем ffmpeg на текущей
-    # позиции через штатный seek-механизм (трек не прерывается).
-    global target_seek_time
+    # Мгновенное применение громкости/кеша: перезапускаем ffmpeg на текущей
+    # позиции через штатный seek-механизм — но с дебаунсом 1.5с, чтобы
+    # перетаскивание ползунка давало ОДИН перезапуск, а не серию.
+    global boost_restart_timer
     if (boost_changed or cache_was != bool(app_config.get("cache_enabled", False))) and current_proc and not current_track_info.get("is_station"):
-        try:
-            cur = int(current_track_info.get("current_time") or 0)
-        except (TypeError, ValueError):
-            cur = 0
-        with state_lock:
-            target_seek_time = max(0, cur)
-        seek_event.set()
+        with boost_restart_lock:
+            if boost_restart_timer:
+                boost_restart_timer.cancel()
+            boost_restart_timer = threading.Timer(1.5, _apply_boost_restart)
+            boost_restart_timer.daemon = True
+            boost_restart_timer.start()
     return jsonify({"ok": True, "config": sanitize_config(app_config)})
 
 @app.route('/api/cache/clear', methods=['POST'])
