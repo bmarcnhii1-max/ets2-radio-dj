@@ -65,6 +65,13 @@ cd ets2-radio-dj
 ets2radio
 ```
 
+Или без git — одним файлом:
+
+```bash
+curl -fsSL https://github.com/bmarcnhii1-max/ets2-radio-dj/releases/latest/download/install_linux.sh | bash
+ets2radio
+```
+
 Установщик кладёт проект в `~/.local/share/ets2-radio-dj`, создаёт изолированный venv
 и команду `ets2radio`. Нужны `python3` (3.10+) и `ffmpeg`. Повторный запуск
 `install_linux.sh` обновляет код, не трогая настройки, историю и токены.

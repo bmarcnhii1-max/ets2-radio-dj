@@ -3,7 +3,7 @@
 # Повторный запуск обновляет код и зависимости, личные данные не трогает.
 set -euo pipefail
 
-SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 INSTALL_DIR="${ETS2RADIO_HOME:-$HOME/.local/share/ets2-radio-dj}"
 BIN_DIR="$HOME/.local/bin"
 PY="${PYTHON:-python3}"
@@ -22,6 +22,15 @@ say "Python: $("$PY" -V 2>&1)"
 say "ffmpeg: $(ffmpeg -version 2>/dev/null | head -1 | cut -d' ' -f1-3)"
 
 # --- 2. Файлы (только рантайм; config.json, история и токены не затираются) ---
+if [ ! -f "$SRC_DIR/server.py" ]; then
+  command -v curl >/dev/null 2>&1 || fail "рядом со скриптом нет server.py, а curl не найден — скачай архив проекта вручную"
+  say "Файлы проекта рядом не найдены — качаю архив с GitHub"
+  TMP_DIR="$(mktemp -d)"
+  trap 'rm -rf "$TMP_DIR"' EXIT
+  curl -fsSL "https://github.com/bmarcnhii1-max/ets2-radio-dj/archive/refs/heads/main.tar.gz" \
+    | tar -xz -C "$TMP_DIR" --strip-components=1 || fail "не удалось скачать архив проекта"
+  SRC_DIR="$TMP_DIR"
+fi
 mkdir -p "$INSTALL_DIR/static" "$BIN_DIR"
 for f in server.py index.html overlay.html requirements.txt LICENSE; do
   cp -f "$SRC_DIR/$f" "$INSTALL_DIR/$f"
