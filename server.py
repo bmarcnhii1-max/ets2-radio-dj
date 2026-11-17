@@ -46,7 +46,8 @@ def resolve_path(fpath):
     if os.path.isabs(fpath):
         return fpath
     return os.path.join(BASE_DIR, fpath)
-CACHE_DIR = os.environ.get("RADIO_CACHE_DIR", r"E:\ets2_radio_cache").strip()
+# E:\ — дефолт только для Windows; на Linux кеш лежит рядом с server.py.
+CACHE_DIR = os.environ.get("RADIO_CACHE_DIR", r"E:\ets2_radio_cache" if os.name == "nt" else "").strip()
 if not CACHE_DIR:
     CACHE_DIR = os.path.join(BASE_DIR, "ets2_radio_cache")
 try:
@@ -3939,20 +3940,55 @@ def lyrics_get():
 
 STREAM_ENTRY = "http://127.0.0.1:5000/radio.mp3|YT Automix DJ|Custom|RU|128|1"
 
+def _steam_libraries():
+    """Библиотеки Steam: дефолтные пути Linux + пути из libraryfolders.vdf."""
+    home = os.path.expanduser("~")
+    roots = [
+        os.path.join(home, ".steam", "steam"),
+        os.path.join(home, ".local", "share", "Steam"),
+        os.path.join(home, ".var", "app", "com.valvesoftware.Steam", ".local", "share", "Steam"),
+    ]
+    libs = []
+    for root in roots:
+        candidates = [root]
+        try:
+            with open(os.path.join(root, "steamapps", "libraryfolders.vdf"), "r",
+                      encoding="utf-8", errors="replace") as f:
+                candidates += re.findall(r'"path"\s*"([^"]+)"', f.read())
+        except OSError:
+            pass
+        for path in candidates:
+            if path not in libs and os.path.isdir(path):
+                libs.append(path)
+    return libs
+
 def find_game_stream_files():
-    """Ищет live_streams.sii у ETS2/ATS: обычные Documents и OneDrive-варианты."""
-    results = []
-    doc_roots = []
+    """Ищет live_streams.sii у ETS2/ATS: Windows-Documents, Linux XDG и Proton-префиксы."""
+    home = os.path.expanduser("~")
     profile = os.environ.get("USERPROFILE", "")
     candidates = [
-        os.path.join(profile, "Documents"),
-        os.path.join(os.environ.get("OneDrive", ""), "Documents") if os.environ.get("OneDrive") else None,
+        os.path.join(home, "Documents"),
+        os.environ.get("XDG_DATA_HOME") or os.path.join(home, ".local", "share"),
     ]
-    doc_roots = [c for c in candidates if c]
+    if profile:
+        candidates.append(os.path.join(profile, "Documents"))
+    if os.environ.get("OneDrive"):
+        candidates.append(os.path.join(os.environ["OneDrive"], "Documents"))
+    # Proton-префиксы: 227300 = ETS2, 270880 = ATS
+    for lib in _steam_libraries():
+        for appid in ("227300", "270880"):
+            candidates.append(os.path.join(
+                lib, "steamapps", "compatdata", appid,
+                "pfx", "drive_c", "users", "steamuser", "Documents"))
     game_dirs = ["Euro Truck Simulator 2", "American Truck Simulator"]
-    for root in doc_roots:
+    seen = set()
+    results = []
+    for root in [c for c in candidates if c]:
         for gd in game_dirs:
             p = os.path.join(root, gd, "live_streams.sii")
+            if p in seen:
+                continue
+            seen.add(p)
             game = "ETS2" if "Euro" in gd else "ATS"
             results.append({"game": game, "path": p, "exists": os.path.exists(p)})
     return results

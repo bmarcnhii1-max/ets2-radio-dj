@@ -3,7 +3,7 @@
 Личное радио для Euro Truck Simulator 2 / ATS: играет твою музыку из YouTube Music
 через встроенное «радио» игры, показывает обложку в OBS и управляется из Game Bar.
 
-![tech](https://img.shields.io/badge/Python-3.10%2B-blue) ![tech](https://img.shields.io/badge/Windows-10%2F11-blue)
+![tech](https://img.shields.io/badge/Python-3.10%2B-blue) ![tech](https://img.shields.io/badge/Windows-10%2F11-blue) ![tech](https://img.shields.io/badge/Linux-yes-blue)
 
 ## Как это работает
 
@@ -55,6 +55,24 @@ start_radio.bat   # сервер + SMTC-мост для медиа-кнопок
 ```
 
 и увеличь счётчик `N` на 1. Либо кнопка **«Прописать»** в настройках веб-интерфейса делает это сама.
+
+## Установка (Linux)
+
+```bash
+git clone https://github.com/bmarcnhii1-max/ets2-radio-dj
+cd ets2-radio-dj
+./install_linux.sh
+ets2radio
+```
+
+Установщик кладёт проект в `~/.local/share/ets2-radio-dj`, создаёт изолированный venv
+и команду `ets2radio`. Нужны `python3` (3.10+) и `ffmpeg`. Повторный запуск
+`install_linux.sh` обновляет код, не трогая настройки, историю и токены.
+
+Игра на Linux (нативная версия или Proton) видит радио по `127.0.0.1:5000` так же,
+как на Windows: вкладка «Настройки» → «Прописать». Виджет Game Bar и SMTC-мост —
+только Windows; на Linux интерфейс открывается в браузере, медиа-клавиши не
+подключены. OBS-оверлей `/overlay` работает как обычно.
 
 ### Вход в Google Music (опционально)
 
