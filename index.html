@@ -57,7 +57,7 @@
     <div class="brand">
       <div class="brand-logo"><svg class="icon"><use href="#i-radio"/></svg></div>
       <div>
-        <div class="brand-title">ETS2 RADIO DJ <span class="brand-badge">v7.1</span></div>
+        <div class="brand-title">ETS2 RADIO DJ</div>
         <div class="brand-sub">Личный мост YouTube Music для ETS2</div>
       </div>
     </div>
@@ -65,7 +65,6 @@
       <div class="pill">
         <img id="headerUserAvatar" class="user-avatar-small" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="" />
         <span class="auth-dot" id="headerAuthDot"></span>
-        <span id="headerAuthLabel">Мой профиль</span>
         <select id="headerProfileSelect" onchange="switchProfile(this.value)">
           <option value="Мой профиль">Мой профиль</option>
         </select>
@@ -122,7 +121,7 @@
 
     <!-- ТЕКСТ ПЕСНИ -->
     <div class="lyrics-panel" id="lyricsPanel">
-      <div class="lyrics-box" id="lyricsBox"><div class="lyrics-empty">Нажми «Текст», чтобы загрузить слова текущего трека.</div></div>
+      <div class="lyrics-box" id="lyricsBox"><div class="lyrics-empty">Слова трека появятся здесь.</div></div>
     </div>
   </div>
 
@@ -142,16 +141,7 @@
   <div class="tab-content active" id="tab-picks">
     <div class="card card-compact" id="quickPicksCard">
       <div class="ytm-section-header">
-        <div class="ytm-user-badge">
-          <div class="ytm-avatar-circle" id="ytmAvatarBadge">
-            <span id="ytmAvatarInitial">О</span>
-            <img id="ytmAvatarPhoto" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="">
-          </div>
-          <div>
-            <div class="ytm-user-sub" id="ytmUserName">ОЛЕГ АНАНАСОВ</div>
-            <div class="ytm-section-title">Быстрый выбор</div>
-          </div>
-        </div>
+        <div class="ytm-section-title">Быстрый выбор</div>
         <button class="btn ghost" title="Обновить рекомендации" onclick="loadQuickPicks(true)"><svg class="icon icon-stroke"><use href="#i-refresh"/></svg></button>
       </div>
 
@@ -163,8 +153,6 @@
         <div class="mode-chip" onclick="setPickMode('liked', this)"><svg class="icon icon-stroke"><use href="#i-thumbs-up"/></svg> Лайки</div>
         <div class="mode-chip" onclick="setPickMode('history', this)"><svg class="icon icon-stroke"><use href="#i-clock"/></svg> История</div>
       </div>
-
-      <div class="taste-line" id="tasteLine" style="display:none;"></div>
 
       <div class="grid-3x3" id="quickPicksGrid">
         <div style="grid-column: 1 / -1; text-align: center; color: var(--text-muted); padding: 20px;">
@@ -187,7 +175,7 @@
       </div>
       <div id="queueItemsList" class="list-scroll" style="max-height:420px;"></div>
     </div>
-    <div class="card muted-note" id="queueEmptyNote">Очередь пуста — выбери трек в «Подборках» или найди через «Поиск».</div>
+    <div class="card muted-note" id="queueEmptyNote">Очередь пуста. Выбери трек в «Подборках» или через «Поиск».</div>
   </div>
 
   <!-- ВКЛАДКА: ПЛЕЙЛИСТЫ -->
@@ -283,7 +271,7 @@
           <b>Разовая настройка (потом больше не нужна):</b><br/>
           1. Открой <a href="https://console.cloud.google.com/apis/credentials" target="_blank">console.cloud.google.com → Credentials</a><br/>
           2. Create Credentials → OAuth client ID → тип <b>TVs and Limited Input devices</b><br/>
-          3. Скопируй Client ID + Client Secret в поля — сервер запомнит их навсегда.
+          3. Скопируй Client ID + Client Secret в поля: сервер запомнит их навсегда.
         </div>
         <div class="input-box">
           <input type="text" id="oauthNameInput" placeholder="Название профиля" value="Мой профиль" />
@@ -302,7 +290,7 @@
 
       <div class="section-divider" id="channelSection">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-          <div class="muted" style="font-size:11.5px; font-weight:700;">КАНАЛ YOUTUBE MUSIC:</div>
+          <div class="muted" style="font-size:12px; font-weight:600;">Канал YouTube Music</div>
           <button class="btn ghost" style="padding:4px 8px; font-size:11px;" onclick="loadProfileChannels()">Обновить</button>
         </div>
         <div id="channelList" class="chips-wrap" style="margin-bottom:8px;"></div>
@@ -313,7 +301,7 @@
       </div>
 
       <div class="section-divider">
-        <div class="muted" style="font-size:11.5px; font-weight:700; margin-bottom:8px;">СОХРАНЁННЫЕ ПРОФИЛИ:</div>
+        <div class="muted" style="font-size:12px; font-weight:600; margin-bottom:8px;">Сохранённые профили</div>
         <div id="profilesList"></div>
       </div>
     </div>
@@ -390,7 +378,7 @@
     <div class="card">
       <div class="muted" style="font-size:12.5px; font-weight:600;">Поток для <code>live_streams.sii</code>:</div>
       <div class="config-box">stream_data[]: "http://127.0.0.1:5000/radio.mp3|YT Automix DJ|Custom|RU|128|1"</div>
-      <div class="muted" style="font-size:11px; margin-top:6px;">OBS-оверлей для стрима: <a href="/overlay" target="_blank">/overlay</a> — добавь как Browser Source</div>
+      <div class="muted" style="font-size:11px; margin-top:6px;">OBS-оверлей для стрима: <a href="/overlay" target="_blank">/overlay</a> (Browser Source)</div>
     </div>
   </div>
 

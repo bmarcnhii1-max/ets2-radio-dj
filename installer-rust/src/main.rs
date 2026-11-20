@@ -190,9 +190,9 @@ fn step_extract(app_dir: &std::path::Path) -> Result<String, String> {
         }
     }
     if moved > 0 {
-        Ok(format!("v{} — распаковано + перенесено твоих данных: {}", APP_VERSION, moved))
+        Ok(format!("v{}: распаковано, данных перенесено {}", APP_VERSION, moved))
     } else {
-        Ok(format!("v{} — распаковано в AppData", APP_VERSION))
+        Ok(format!("v{}: распаковано в AppData", APP_VERSION))
     }
 }
 
@@ -380,7 +380,7 @@ fn step_start_server_and_shortcut(app_dir: &std::path::Path) -> Result<String, S
         std::thread::sleep(std::time::Duration::from_secs(5));
     }
     let server_msg = if server_is_up() {
-        "сервер работает — http://127.0.0.1:5000".to_string()
+        "сервер работает: http://127.0.0.1:5000".to_string()
     } else {
         "сервер не поднялся — запусти start_radio.bat вручную".to_string()
     };
@@ -873,14 +873,6 @@ impl eframe::App for InstallerApp {
                                 .stroke(egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(0x1F, 0x26, 0x33)))
                                 .inner_margin(egui::Margin::symmetric(16.0, 14.0))
                                 .show(ui, |ui| {
-                                    ui.label(
-                                        egui::RichText::new("ЧТО БУДЕТ УСТАНОВЛЕНО")
-                                            .size(10.0)
-                                            .strong()
-                                            .color(DIM)
-                                            .extra_letter_spacing(1.2),
-                                    );
-                                    ui.add_space(10.0);
                                     for (i, step) in st.steps.iter().enumerate() {
                                         ui.horizontal(|ui| {
                                             let (ir, _) = ui.allocate_exact_size(egui::vec2(18.0, 18.0), egui::Sense::hover());
@@ -937,12 +929,12 @@ impl eframe::App for InstallerApp {
                             let (msg, msg_color) = if st.fail {
                                 (format!("Ошибка: {}", st.detail), RED)
                             } else if st.done {
-                                ("Установка завершена — ярлык «ETS2 Radio DJ» на рабочем столе!".to_string(), ACCENT)
+                                ("Установка завершена. Ярлык «ETS2 Radio DJ» на рабочем столе".to_string(), ACCENT)
                             } else if st.running {
                                 let active_idx = st.steps.iter().position(|s| s.state == StepState::Active).unwrap_or(0);
                                 (format!("{} {}", spinner, STEP_NAMES[active_idx]), TEXT)
                             } else {
-                                ("Нажми «Установить» — остальное сделаю я.".to_string(), MUTED)
+                                ("Готов к установке.".to_string(), MUTED)
                             };
                             ui.horizontal(|ui| {
                                 let dot_color = if st.fail { RED } else if st.done { ACCENT } else if st.running { YELLOW } else { DIM };

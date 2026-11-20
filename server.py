@@ -3463,7 +3463,7 @@ def get_quick_picks():
                         picks.append(p)
                 if picks:
                     fallback_used = True
-                    fallback_msg = "Волну текущего трека получить не удалось — показаны похожие треки"
+                    fallback_msg = "Волну текущего трека получить не удалось, показаны похожие треки"
             except Exception:
                 pass
 
@@ -3536,13 +3536,13 @@ def get_quick_picks():
             if picks:
                 random.shuffle(picks)
                 fallback_used = True
-                fallback_msg = "Микс временно недоступен — показана перемешанная история"
+                fallback_msg = "Микс временно недоступен, показана перемешанная история"
 
     if not picks and mode in ("vibe", "radio", "charts"):
         picks = get_pk_home_picks() if is_pk_profile_name() else get_ananasov_home_picks()
         if mode != "vibe":
             fallback_used = True
-            fallback_msg = "Рекомендации временно недоступны — показана подборка по умолчанию"
+            fallback_msg = "Рекомендации временно недоступны, показана подборка по умолчанию"
 
     if mode in ("vibe", "radio", "charts", "mix"):
         with state_lock:

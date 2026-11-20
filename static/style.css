@@ -15,8 +15,6 @@
   --primary-bright: #1ed760;
   --primary-dim: rgba(29, 185, 84, 0.14);
   --teal: #0bc2b1;
-  --grad: linear-gradient(135deg, #1db954 0%, #0bc2b1 100%);
-  --grad-soft: linear-gradient(135deg, rgba(29,185,84,0.18) 0%, rgba(11,194,177,0.18) 100%);
   --cyan: #58a6ff;
   --yellow: #f5a623;
   --red: #ff5c5c;
@@ -25,7 +23,6 @@
   --radius: 16px;
   --radius-sm: 10px;
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.42);
-  --glow: 0 4px 18px rgba(29, 185, 84, 0.28);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -39,19 +36,6 @@ body {
   font-size: 14px;
   line-height: 1.45;
   min-height: 100vh;
-}
-
-/* Аврора-подсветка фона: три мягких пятна */
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background:
-    radial-gradient(640px 420px at 10% -10%, rgba(29, 185, 84, 0.10), transparent 62%),
-    radial-gradient(720px 520px at 104% 12%, rgba(11, 194, 177, 0.08), transparent 62%),
-    radial-gradient(900px 640px at 50% 118%, rgba(88, 166, 255, 0.05), transparent 60%);
 }
 
 ::selection { background: rgba(29, 185, 84, 0.35); }
@@ -68,7 +52,7 @@ body::before {
 .container {
   max-width: 920px;
   margin: 0 auto;
-  padding: 18px 18px 46px;
+  padding: 16px 16px 48px;
 }
 
 a { color: var(--teal); text-decoration: none; }
@@ -94,23 +78,15 @@ code {
   margin-bottom: 16px;
   flex-wrap: wrap;
 }
-.brand { display: flex; align-items: center; gap: 11px; }
+.brand { display: flex; align-items: center; gap: 12px; }
 .brand-logo {
   width: 42px; height: 42px;
-  background: var(--grad);
-  border-radius: 13px;
+  background: var(--primary);
+  border-radius: 12px;
   display: flex; align-items: center; justify-content: center;
   font-size: 20px;
-  box-shadow: var(--glow);
 }
-.brand-title { font-weight: 800; font-size: 16px; letter-spacing: 0.4px; }
-.brand-badge {
-  font-size: 9px; padding: 2px 8px; border-radius: 20px;
-  background: var(--grad-soft);
-  color: var(--primary-bright);
-  border: 1px solid rgba(29, 185, 84, 0.25);
-  font-family: 'JetBrains Mono', monospace; vertical-align: middle;
-}
+.brand-title { font-weight: 600; font-size: 16px; letter-spacing: 0.4px; }
 .brand-sub { font-size: 11px; color: var(--text-muted); }
 
 .header-pills { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
@@ -135,22 +111,22 @@ code {
 
 /* ---------- Карточки ---------- */
 .card {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 42%), var(--surface);
+  background: var(--surface);
   border: 1px solid var(--card-border);
   border-radius: var(--radius);
-  padding: 18px 20px;
-  margin-bottom: 14px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
   box-shadow: var(--shadow);
 }
-.card-compact { padding: 14px 16px; }
+.card-compact { padding: 16px; }
 .muted-note {
   color: var(--text-muted);
   font-size: 12.5px;
   text-align: center;
-  padding: 20px 14px;
+  padding: 20px 16px;
 }
 .card-title {
-  font-size: 13px; font-weight: 800;
+  font-size: 13px; font-weight: 600;
   display: flex; align-items: center; gap: 8px;
   margin-bottom: 12px;
   letter-spacing: 0.2px;
@@ -164,10 +140,7 @@ code {
 
 /* Плеер — главная карточка: зелёный оттенок и свечение */
 #playerCard {
-  background:
-    radial-gradient(480px 180px at 85% -40%, rgba(29, 185, 84, 0.10), transparent 65%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 40%),
-    var(--surface);
+  background: var(--surface);
   border: 1px solid rgba(29, 185, 84, 0.22);
 }
 
@@ -182,23 +155,19 @@ code {
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s, border-color 0.15s,
-              transform 0.12s, box-shadow 0.15s, filter 0.15s;
+  transition: background 0.15s ease-out, color 0.15s ease-out,
+              border-color 0.15s ease-out, box-shadow 0.15s ease-out, filter 0.15s ease-out;
 }
 .btn:hover { background: var(--surface-3); border-color: var(--card-border-strong); }
-.btn:active { transform: scale(0.97); }
+.btn:active { filter: brightness(0.92); }
 .btn.primary {
-  background: var(--grad);
+  background: var(--primary);
   color: #04120a;
   border: none;
-  font-weight: 800;
-  box-shadow: 0 3px 14px rgba(29, 185, 84, 0.25);
+  font-weight: 600;
 }
 .btn.primary:hover {
-  background: var(--grad);
-  filter: brightness(1.12);
-  transform: translateY(-1px);
-  box-shadow: 0 5px 18px rgba(29, 185, 84, 0.35);
+  background: var(--primary-bright);
 }
 .btn.cyan { background: var(--surface-2); border: 1px solid rgba(88, 166, 255, 0.45); }
 .btn.cyan:hover { border-color: var(--cyan); box-shadow: 0 3px 12px rgba(88, 166, 255, 0.15); }
@@ -217,7 +186,7 @@ code {
 /* ---------- Плеер ---------- */
 .player-layout {
   display: flex; gap: 20px; align-items: center;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 .cover-wrapper {
   width: 152px; height: 152px; flex-shrink: 0;
@@ -233,24 +202,23 @@ code {
   display: block;
 }
 .player-meta { flex: 1; min-width: 0; }
-.status-row { margin-bottom: 7px; }
+.status-row { margin-bottom: 8px; }
 .live-badge {
   display: inline-block;
   font-size: 10px; font-family: 'JetBrains Mono', monospace;
   color: #04120a;
-  background: var(--grad);
-  padding: 3px 10px; border-radius: 20px;
-  font-weight: 700;
-  box-shadow: var(--glow);
+  background: var(--primary);
+  padding: 4px 10px; border-radius: 20px;
+  font-weight: 600;
 }
 .track-title {
-  font-size: 23px; font-weight: 800;
+  font-size: 23px; font-weight: 600;
   letter-spacing: -0.2px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .track-artist {
   font-size: 14px; color: var(--text-muted);
-  margin-top: 3px;
+  margin-top: 4px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
@@ -265,7 +233,7 @@ code {
 .timeline-bar:hover { height: 9px; }
 .timeline-fill {
   height: 100%; width: 0%;
-  background: var(--grad);
+  background: var(--primary);
   border-radius: 3px;
   transition: width 0.3s linear;
 }
@@ -274,7 +242,7 @@ code {
   display: flex; justify-content: space-between;
   font-size: 10.5px; color: var(--text-muted);
   font-family: 'JetBrains Mono', monospace;
-  margin-top: 5px;
+  margin-top: 4px;
 }
 
 .controls-row {
@@ -293,18 +261,14 @@ code {
 }
 .btn-circle:hover {
   background: var(--surface-3);
-  transform: translateY(-1px);
   border-color: var(--card-border-strong);
 }
 .btn-circle.primary {
-  background: var(--grad);
+  background: var(--primary);
   border: none;
-  box-shadow: var(--glow);
 }
 .btn-circle.primary:hover {
-  background: var(--grad);
-  filter: brightness(1.12);
-  transform: translateY(-1px) scale(1.03);
+  background: var(--primary-bright);
 }
 
 /* Визуализатор */
@@ -338,7 +302,7 @@ code {
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: color 0.2s, background 0.2s;
+  transition: color 0.15s ease-out, background 0.15s ease-out;
   white-space: pre-wrap;
 }
 .lyrics-line:hover { background: var(--surface-2); color: var(--text); }
@@ -351,7 +315,7 @@ code {
 /* ---------- Сетка подборок ---------- */
 .mode-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
 .mode-chip {
-  display: inline-flex; align-items: center; gap: 5px;
+  display: inline-flex; align-items: center; gap: 4px;
   padding: 6px 13px;
   border-radius: 20px;
   background: var(--surface-2);
@@ -359,34 +323,20 @@ code {
   color: var(--text-muted);
   font-size: 12px; font-weight: 700;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  transition: background 0.15s ease-out, color 0.15s ease-out, border-color 0.15s ease-out;
   user-select: none;
 }
 .mode-chip:hover { color: var(--text); background: var(--surface-3); }
 .mode-chip.active {
-  background: var(--grad);
+  background: var(--primary);
   color: #04120a;
   border-color: transparent;
-  box-shadow: 0 3px 12px rgba(29, 185, 84, 0.22);
 }
 
 .ytm-section-header {
   display: flex; justify-content: space-between; align-items: center;
   margin-bottom: 10px;
 }
-.ytm-user-badge { display: flex; align-items: center; gap: 9px; }
-.ytm-avatar-circle {
-  width: 32px; height: 32px; border-radius: 50%;
-  background: var(--surface-2);
-  border: 1px solid var(--card-border);
-  display: flex; align-items: center; justify-content: center;
-  font-weight: 800; overflow: hidden;
-  position: relative;
-  font-size: 13px;
-}
-.ytm-avatar-circle img { width: 100%; height: 100%; object-fit: cover; position: absolute; top: 0; left: 0; }
-.ytm-user-sub { font-size: 9.5px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; }
-.ytm-section-title { font-size: 14px; font-weight: 800; }
 
 /* Компактная сетка подборок: 4 колонки */
 .grid-3x3 {
@@ -402,12 +352,10 @@ code {
   background: var(--surface-2);
   border: 1px solid var(--card-border);
   cursor: pointer;
-  transition: transform 0.16s, box-shadow 0.16s, border-color 0.16s;
+  transition: border-color 0.15s ease-out, box-shadow 0.15s ease-out;
 }
 .pick-card:hover {
-  transform: translateY(-3px) scale(1.015);
   border-color: rgba(29, 185, 84, 0.35);
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.5);
 }
 .pick-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .pick-overlay {
@@ -426,14 +374,13 @@ code {
 .pick-play-icon {
   position: absolute; right: 6px; bottom: 6px;
   width: 30px; height: 30px; border-radius: 50%;
-  background: var(--grad); color: #04120a;
+  background: var(--primary); color: #04120a;
   display: flex; align-items: center; justify-content: center;
   font-size: 13px;
-  box-shadow: var(--glow);
   opacity: 0; transform: translateY(4px);
   transition: opacity 0.15s, transform 0.15s;
 }
-.pick-play-icon .icon { width: 13px; height: 13px; margin-left: 1px; }
+.pick-play-icon .icon { width: 13px; height: 13px; margin-left: 2px; }
 .pick-card:hover .pick-play-icon { opacity: 1; transform: translateY(0); }
 .pick-album-btn {
   position: absolute; left: 6px; bottom: 6px;
@@ -457,16 +404,6 @@ code {
 }
 
 .carousel-dots { display: flex; justify-content: center; gap: 6px; margin-top: 12px; }
-
-/* Строка вкусового профиля: «Нравится: …» над сеткой */
-.taste-line {
-  font-size: 11px;
-  color: var(--text-muted);
-  margin: -4px 0 10px;
-  padding-left: 2px;
-  letter-spacing: 0.2px;
-}
-.taste-line::before { content: '◆ '; color: var(--primary); font-size: 9px; }
 
 /* Чип «почему рекомендую» на карточке подборки */
 .pick-reason {
@@ -555,9 +492,9 @@ code {
   font-size: 12px; font-weight: 700;
   font-family: inherit;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, transform 0.12s;
+  transition: background 0.15s ease-out, border-color 0.15s ease-out;
 }
-.playlist-chip:hover { background: var(--surface-3); transform: translateY(-1px); }
+.playlist-chip:hover { background: var(--surface-3); }
 .playlist-chip.active {
   border-color: var(--primary);
   color: var(--primary-bright);
@@ -567,8 +504,8 @@ code {
 
 /* ---------- Вкладки: сегментный контрол ---------- */
 .tabs-nav {
-  display: flex; gap: 3px;
-  background: rgba(16, 21, 29, 0.8);
+  display: flex; gap: 4px;
+  background: var(--surface);
   border: 1px solid var(--card-border);
   border-radius: 14px;
   padding: 4px;
@@ -585,20 +522,15 @@ code {
   font-size: 12.5px; font-weight: 700;
   font-family: inherit;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+  transition: background 0.15s ease-out, color 0.15s ease-out;
 }
 .tab-btn:hover { color: var(--text); background: var(--surface-2); }
 .tab-btn.active {
-  background: var(--grad);
+  background: var(--primary);
   color: #04120a;
-  box-shadow: 0 3px 10px rgba(29, 185, 84, 0.22);
 }
 .tab-content { display: none; }
-.tab-content.active { display: block; animation: tabIn 0.18s ease; }
-@keyframes tabIn {
-  from { opacity: 0.35; transform: translateY(3px); }
-  to { opacity: 1; transform: none; }
-}
+.tab-content.active { display: block; }
 
 .input-box { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
 input[type="text"], textarea, select {
@@ -648,7 +580,7 @@ input::placeholder, textarea::placeholder { color: #6d7887; }
 .search-results { margin-top: 10px; display: flex; flex-direction: column; gap: 4px; }
 
 /* Авторизация */
-.auth-toggle-bar { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
+.auth-toggle-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
 .auth-sub-btn {
   background: var(--surface-2);
   color: var(--text-muted);
@@ -661,7 +593,7 @@ input::placeholder, textarea::placeholder { color: #6d7887; }
 }
 .auth-sub-btn:hover { color: var(--text); }
 .auth-sub-btn.active {
-  background: var(--grad-soft);
+  background: var(--primary-dim);
   color: var(--primary-bright);
   border-color: rgba(29, 185, 84, 0.35);
 }
@@ -671,19 +603,19 @@ input::placeholder, textarea::placeholder { color: #6d7887; }
   border-radius: var(--radius-sm);
   padding: 10px 12px;
   font-size: 12px;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 .oauth-box {
   background: var(--surface-2);
   border: 1px solid var(--card-border);
   border-radius: 12px;
-  padding: 14px;
+  padding: 16px;
   margin-top: 12px;
   text-align: center;
 }
 .oauth-code-display {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 26px; font-weight: 800; letter-spacing: 4px;
+  font-size: 26px; font-weight: 600; letter-spacing: 4px;
   background: var(--bg);
   border: 1px solid rgba(29, 185, 84, 0.3);
   border-radius: var(--radius-sm);
@@ -693,7 +625,7 @@ input::placeholder, textarea::placeholder { color: #6d7887; }
 }
 .section-divider {
   border-top: 1px solid var(--card-border);
-  margin-top: 16px; padding-top: 14px;
+  margin-top: 16px; padding-top: 16px;
 }
 
 /* ---------- Настройки ---------- */
@@ -727,7 +659,7 @@ input::placeholder, textarea::placeholder { color: #6d7887; }
   background: var(--surface-3);
   border-radius: 22px;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background 0.15s ease-out;
 }
 .switch-slider::before {
   content: '';
@@ -737,7 +669,7 @@ input::placeholder, textarea::placeholder { color: #6d7887; }
   top: 3px; left: 3px;
   transition: transform 0.2s;
 }
-.switch input:checked + .switch-slider { background: var(--grad); }
+.switch input:checked + .switch-slider { background: var(--primary); }
 .switch input:checked + .switch-slider::before { transform: translateX(18px); }
 
 /* ---------- Станции ---------- */
@@ -750,26 +682,24 @@ input::placeholder, textarea::placeholder { color: #6d7887; }
   color: var(--text);
   font-family: inherit;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, transform 0.12s;
+  transition: background 0.15s ease-out, border-color 0.15s ease-out;
 }
 .station-chip:hover {
   background: var(--surface-3);
-  transform: translateY(-1px);
   border-color: var(--card-border-strong);
 }
 .station-chip.active {
   border-color: var(--primary);
   background: var(--primary-dim);
-  box-shadow: 0 0 14px rgba(29, 185, 84, 0.12);
 }
 .station-chip .st-name { font-size: 12.5px; font-weight: 700; }
-.station-chip .st-genre { font-size: 10px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; margin-top: 1px; }
+.station-chip .st-genre { font-size: 10px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; margin-top: 2px; }
 
 /* ---------- Тост ---------- */
 .toast {
   position: fixed;
   left: 50%; bottom: 26px;
-  transform: translateX(-50%) translateY(20px);
+  transform: translate(-50%, 20px);
   background: var(--surface-3);
   border: 1px solid rgba(29, 185, 84, 0.35);
   color: var(--text);
@@ -779,11 +709,11 @@ input::placeholder, textarea::placeholder { color: #6d7887; }
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.2s, transform 0.2s;
+  transition: opacity 0.15s ease-out;
   z-index: 999;
   max-width: 90vw;
 }
-.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast.show { opacity: 1; transform: translateX(-50%); }
 
 /* ---------- Прочее ---------- */
 .config-box {
@@ -806,7 +736,7 @@ input::placeholder, textarea::placeholder { color: #6d7887; }
   .settings-grid { grid-template-columns: 1fr; }
   .cover-wrapper { width: 120px; height: 120px; }
   .track-title { font-size: 18px; }
-  .tabs-nav { gap: 3px; }
+  .tabs-nav { gap: 4px; }
   .tab-btn { padding: 7px 11px; font-size: 11.5px; }
 }
 @media (max-width: 550px) {

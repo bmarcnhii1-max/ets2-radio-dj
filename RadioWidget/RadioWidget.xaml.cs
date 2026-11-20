@@ -424,7 +424,7 @@ namespace RadioWidget
             var info = new StackPanel { Opacity = alive ? 1.0 : 0.45 };
             info.Children.Add(new TextBlock
             {
-                Text = name + (id == activeStationId ? "  •" : ""),
+                Text = name,
                 FontSize = 11,
                 FontWeight = Windows.UI.Text.FontWeights.SemiBold,
                 Foreground = new SolidColorBrush(id == activeStationId

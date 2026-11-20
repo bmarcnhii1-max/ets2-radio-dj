@@ -206,7 +206,7 @@
                     <ScrollViewer MaxHeight="400" Margin="0,7,0,0" VerticalScrollBarVisibility="Auto">
                         <StackPanel x:Name="QueueListPanel"/>
                     </ScrollViewer>
-                    <TextBlock x:Name="QueueEmptyText" Text="Очередь пуста — выбери трек во вкладке Поиск или в Подборках Web UI"
+                    <TextBlock x:Name="QueueEmptyText" Text="Очередь пуста. Выбери трек во вкладке Поиск или в Подборках Web UI"
                                FontSize="10" Foreground="#FF7A7F8A" TextWrapping="Wrap" Margin="2,10,2,0" HorizontalAlignment="Center"/>
                 </StackPanel>
 

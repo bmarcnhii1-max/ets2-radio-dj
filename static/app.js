@@ -85,7 +85,7 @@ function formatTime(s) {
   s = Math.max(0, parseInt(s) || 0);
   const m = Math.floor(s / 60);
   const sec = s % 60;
-  return `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+  return (m < 10 ? '0' : '') + m + ':' + (sec < 10 ? '0' : '') + sec;
 }
 
 /* ============ БЫСТРЫЙ ВЫБОР ============ */
@@ -202,18 +202,7 @@ async function loadQuickPicks(force = false) {
     allLoadedPicks = data.picks || [];
     if (currentPageIndex > 0 && allLoadedPicks.length <= currentPageIndex * PICKS_PAGE_SIZE) currentPageIndex = 0;
 
-    if (data.user_name) {
-      document.getElementById('ytmUserName').textContent = data.user_name.toUpperCase();
-      document.getElementById('ytmAvatarInitial').textContent = data.user_name.charAt(0).toUpperCase();
-    }
     if (data.fallback && data.message) showToast(data.message);
-
-    const tasteLine = document.getElementById('tasteLine');
-    if (tasteLine) {
-      const loved = (data.taste && data.taste.loved) || [];
-      tasteLine.textContent = loved.length ? `Нравится: ${loved.join(' · ')}` : '';
-      tasteLine.style.display = loved.length ? '' : 'none';
-    }
 
     if (allLoadedPicks.length === 0) {
       grid.innerHTML = `<div style="grid-column: 1 / -1; text-align: center; color: var(--text-muted); padding: 24px;">${esc(data.message || 'Нет треков для отображения.')}</div>`;
@@ -235,7 +224,7 @@ async function sendQuickPick(videoId, title, artist, thumbnail) {
   document.getElementById('trackTitle').textContent = title;
   document.getElementById('trackArtist').textContent = artist || "Запуск эфира...";
   if (thumbnail) document.getElementById('trackThumb').src = thumbnail;
-  document.getElementById('sourceBadge').textContent = `● ПЕРЕКЛЮЧЕНИЕ...`;
+  document.getElementById('sourceBadge').textContent = 'ПЕРЕКЛЮЧЕНИЕ...';
 
   try {
     const res = await fetch('/api/change', {
@@ -265,7 +254,7 @@ async function sendPlaylist(playlistId, title, artist, thumbnail) {
   pendingTrack = { videoId: null, title: title, artist: artist || "Альбом", thumbnail: thumbnail || null, previousVideoId: lastStatusVideoId, until: Date.now() + 10000 };
   document.getElementById('trackTitle').textContent = title;
   document.getElementById('trackArtist').textContent = artist || "Альбом";
-  document.getElementById('sourceBadge').textContent = `● ЗАГРУЗКА...`;
+  document.getElementById('sourceBadge').textContent = 'ЗАГРУЗКА...';
   try {
     const res = await fetch('/api/change', {
       method: 'POST',
@@ -288,7 +277,7 @@ async function sendAlbum(title, artist) {
   pendingTrack = { videoId: null, title: query, artist: "Загрузка треков альбома...", thumbnail: null, previousVideoId: lastStatusVideoId, until: Date.now() + 10000 };
   document.getElementById('trackTitle').textContent = query;
   document.getElementById('trackArtist').textContent = "Загрузка треков альбома...";
-  document.getElementById('sourceBadge').textContent = `● ЗАГРУЗКА...`;
+  document.getElementById('sourceBadge').textContent = 'ЗАГРУЗКА...';
   try {
     const res = await fetch('/api/change', {
       method: 'POST',
@@ -329,7 +318,7 @@ async function sendTrack(isAlbumMode = false) {
   pendingTrack = { videoId: null, title: query, artist: isAlbumMode ? "Загрузка треков альбома..." : "Запуск эфира...", thumbnail: null, previousVideoId: lastStatusVideoId, until: Date.now() + 8000 };
   document.getElementById('trackTitle').textContent = query;
   document.getElementById('trackArtist').textContent = isAlbumMode ? "Загрузка треков альбома..." : "Запуск эфира...";
-  document.getElementById('sourceBadge').textContent = `● ЗАГРУЗКА...`;
+  document.getElementById('sourceBadge').textContent = 'ЗАГРУЗКА...';
 
   try {
     const res = await fetch('/api/change', {
@@ -343,7 +332,7 @@ async function sendTrack(isAlbumMode = false) {
     document.getElementById('offsetInput').value = '';
   } catch (e) {
     pendingTrack = null;
-    document.getElementById('sourceBadge').textContent = '● ОШИБКА';
+    document.getElementById('sourceBadge').textContent = 'ОШИБКА';
     showToast(e.message || 'Ошибка запуска трека');
   }
   updateStatus();
@@ -466,7 +455,7 @@ function renderQueue(queue, currentAlbum) {
         <span class="row-num">${idx + 1}</span>
         ${tag}
         <span class="row-title">${esc(item.title)}</span>
-        <span class="row-artist">— ${esc(item.artist || 'YT Music')}</span>
+        <span class="row-artist">${esc(item.artist || 'YT Music')}</span>
       </div>
       <div class="row-actions">
         <button class="btn queue-up-btn" title="Выше">${icon('chevron-up')}</button>
@@ -578,7 +567,7 @@ async function togglePause() {
 
 async function previousTrack() {
   showToast("Предыдущий трек...");
-  document.getElementById('sourceBadge').textContent = "● ПЕРЕКЛЮЧЕНИЕ...";
+  document.getElementById('sourceBadge').textContent = 'ПЕРЕКЛЮЧЕНИЕ...';
   try {
     await fetch('/api/control', {
       method: 'POST',
@@ -593,7 +582,7 @@ async function previousTrack() {
 
 async function skipTrack() {
   showToast("Пропускаю трек...");
-  document.getElementById('sourceBadge').textContent = "● ПЕРЕКЛЮЧЕНИЕ...";
+  document.getElementById('sourceBadge').textContent = 'ПЕРЕКЛЮЧЕНИЕ...';
   await fetch('/api/control', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -902,7 +891,7 @@ async function playPlaylist(playlistId, title) {
   pendingTrack = { videoId: null, title: "Загрузка плейлиста...", artist: title, thumbnail: null, previousVideoId: lastStatusVideoId, until: Date.now() + 10000 };
   document.getElementById('trackTitle').textContent = "Загрузка плейлиста...";
   document.getElementById('trackArtist').textContent = title;
-  document.getElementById('sourceBadge').textContent = "● ЗАГРУЗКА ПЛЕЙЛИСТА...";
+  document.getElementById('sourceBadge').textContent = 'ЗАГРУЗКА ПЛЕЙЛИСТА...';
   try {
     const res = await fetch('/api/change', {
       method: 'POST',
@@ -1085,7 +1074,7 @@ async function loadOwnPlaylists() {
           row.innerHTML = `
             <div class="row-main">
               <span class="row-title">${esc(track.title || 'Трек')}</span>
-              <span class="row-artist">— ${esc(track.artist || '')}</span>
+              <span class="row-artist">${esc(track.artist || '')}</span>
             </div>
             <div class="row-actions">
               <button class="btn pl-track-play" title="Слушать">${icon('play')}</button>
@@ -1106,7 +1095,7 @@ async function loadOwnPlaylists() {
           const empty = document.createElement('div');
           empty.className = 'muted';
           empty.style.cssText = 'font-size:11px; padding:4px 34px;';
-          empty.textContent = 'Пустой — добавь текущий трек кнопкой «+»';
+          empty.textContent = 'Пустой плейлист.';
           wrap.appendChild(empty);
         }
       }
@@ -1160,7 +1149,7 @@ async function playStation(id, name) {
 async function stopStation() {
   try {
     await fetch('/api/station/stop', { method: 'POST' });
-    showToast('Станция остановлена — возвращаюсь к очереди');
+    showToast('Станция остановлена, возвращаюсь к очереди');
     setTimeout(() => { updateStatus(); loadStations(); }, 1500);
   } catch (e) {
     showToast(e.message || 'Ошибка');
@@ -1201,7 +1190,7 @@ async function updateStatus() {
       document.getElementById('trackTitle').textContent = pendingTrack.title || data.track.title;
       document.getElementById('trackArtist').textContent = pendingTrack.artist || data.track.artist;
       if (pendingTrack.thumbnail) document.getElementById('trackThumb').src = pendingTrack.thumbnail;
-      document.getElementById('sourceBadge').textContent = `● ПЕРЕКЛЮЧЕНИЕ...`;
+      document.getElementById('sourceBadge').textContent = 'ПЕРЕКЛЮЧЕНИЕ...';
     } else {
       pendingTrack = null;
       document.getElementById('trackTitle').textContent = data.track.title;
@@ -1253,38 +1242,21 @@ async function updateStatus() {
 
     // Статус аккаунта
     const authDot = document.getElementById('headerAuthDot');
-    const authLabel = document.getElementById('headerAuthLabel');
     const avatarSmall = document.getElementById('headerUserAvatar');
-    const ytmAvatarPhoto = document.getElementById('ytmAvatarPhoto');
-    const ytmAvatarInit = document.getElementById('ytmAvatarInitial');
-    const ytmUserName = document.getElementById('ytmUserName');
-
     const currentName = (data.account_info && data.account_info.accountName) ? data.account_info.accountName : data.active_profile;
-    ytmUserName.textContent = currentName.toUpperCase();
 
     authDot.classList.remove('green', 'yellow');
     if (data.is_auth) {
       authDot.classList.add('green');
-      authLabel.textContent = currentName;
       if (data.account_info && data.account_info.accountPhotoUrl) {
         avatarSmall.src = data.account_info.accountPhotoUrl;
         avatarSmall.style.display = '';
-        ytmAvatarPhoto.src = data.account_info.accountPhotoUrl;
-        ytmAvatarPhoto.style.display = 'block';
-        ytmAvatarInit.style.display = 'none';
       } else {
         avatarSmall.style.display = 'none';
-        ytmAvatarPhoto.style.display = 'none';
-        ytmAvatarInit.style.display = 'block';
-        ytmAvatarInit.textContent = currentName.charAt(0).toUpperCase();
       }
     } else {
       authDot.classList.add('yellow');
-      authLabel.textContent = currentName;
       avatarSmall.style.display = 'none';
-      ytmAvatarPhoto.style.display = 'none';
-      ytmAvatarInit.style.display = 'block';
-      ytmAvatarInit.textContent = currentName.charAt(0).toUpperCase();
     }
 
     const sig = JSON.stringify([data.profiles, data.active_profile, data.is_auth, data.profile_accounts]);
@@ -1326,7 +1298,7 @@ async function updateStatus() {
   } catch (e) {
     console.error('Status update failed:', e);
     if (requestId === statusRequestId) {
-      document.getElementById('sourceBadge').textContent = '● СЕРВЕР НЕДОСТУПЕН';
+      document.getElementById('sourceBadge').textContent = 'СЕРВЕР НЕДОСТУПЕН';
     }
   }
 }
@@ -1354,7 +1326,7 @@ async function loadProfileChannels() {
       const hint = document.createElement('span');
       hint.className = 'muted';
       hint.style.fontSize = '11px';
-      hint.textContent = 'Автосписок недоступен — вставь Brand channel ID вручную.';
+      hint.textContent = 'Автосписок недоступен. Вставь Brand channel ID вручную.';
       box.appendChild(hint);
     }
   } catch (e) {
@@ -1396,7 +1368,7 @@ function renderProfilesList(list, active, isAuth, accounts) {
 
     const opt = document.createElement('option');
     opt.value = name;
-    opt.textContent = isA ? `★ ${name}` : name;
+    opt.textContent = name;
     if (isA) opt.selected = true;
     select.appendChild(opt);
 
@@ -1649,7 +1621,7 @@ async function checkEts2Stream() {
       const p = data.all.find(f => f.exists && f.has_stream);
       el.textContent = 'Радио уже прописано в ' + p.game + ' (' + p.path + ')';
     } else {
-      el.textContent = 'Радио в live_streams.sii не прописано — нажми «Прописать»';
+      el.textContent = 'Радио в live_streams.sii не прописано.';
     }
   } catch (e) {
     el.textContent = 'Не удалось проверить игру';
