@@ -48,3 +48,4 @@ install_radio.exe
 installer-rust/target/
 ETS2RadioDJ_bundle.zip
 install_icon.ico
+taste.json
