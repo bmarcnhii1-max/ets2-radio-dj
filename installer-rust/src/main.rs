@@ -1,22 +1,22 @@
-// ETS2 Radio DJ — установщик на Rust (eframe/egui)
-// Стиль сайта: тёмный #0a0d12 + зелёный градиент #1db954→#0bc2b1.
-// Кнопки закреплены к низу окна (TopBottomPanel), контент в ScrollArea —
-// при любом размере окна ничего не уезжает за край.
+// ETS2 Radio DJ — установщик + лаунчер в одном exe (eframe/egui)
+// Первый запуск (не установлено) → окно установки: AppData, виджет, ярлык на рабочем столе.
+// Повторный запуск (или ярлык) → компактный лаунчер: поднимает сервер и медиа-кнопки,
+// показывает статус, умеет открыть веб-приложение и переустановить файлы.
 // Все внешние процессы — с CREATE_NO_WINDOW, PowerShell не видно.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use eframe::egui;
 use std::os::windows::process::CommandExt;
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 // bundle с файлами проекта вшит прямо в exe — «один файл и всё работает»
 const BUNDLE: &[u8] = include_bytes!("../../ETS2RadioDJ_bundle.zip");
 const STREAM_ENTRY: &str = "http://127.0.0.1:5000/radio.mp3|YT Automix DJ|Custom|RU|128|1";
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-const APP_VERSION: &str = "1.1";
+const APP_VERSION: &str = "1.2";
 
 const ACCENT: egui::Color32 = egui::Color32::from_rgb(0x1D, 0xB9, 0x54);
-
 const BG: egui::Color32 = egui::Color32::from_rgb(0x0A, 0x0D, 0x12);
 const BAR_BG: egui::Color32 = egui::Color32::from_rgb(0x0D, 0x11, 0x18);
 const CARD: egui::Color32 = egui::Color32::from_rgb(0x13, 0x18, 0x22);
@@ -35,7 +35,7 @@ const STEP_NAMES: [&str; 7] = [
     "Виджет Xbox Game Bar",
     "Медиа-кнопки в автозапуск",
     "Радио в live_streams.sii игры",
-    "Запуск сервера",
+    "Запуск сервера и ярлык",
 ];
 
 const SPINNER: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
@@ -136,7 +136,7 @@ fn find_python() -> Option<String> {
 }
 
 // Всегда распаковываем заново: повторный запуск установщика = обновление файлов.
-// Пользовательские данные (config.json, токены, профили) в bundle не входят — не трогаются.
+// Пользовательские данные (config.json, токены, профили, вкус) в bundle не входят.
 fn step_extract(app_dir: &std::path::Path) -> Result<String, String> {
     let cursor = std::io::Cursor::new(BUNDLE);
     let mut archive = zip::ZipArchive::new(cursor).map_err(|e| format!("zip: {}", e))?;
@@ -155,7 +155,45 @@ fn step_extract(app_dir: &std::path::Path) -> Result<String, String> {
         let mut out = std::fs::File::create(&out_path).map_err(|e| format!("create: {}", e))?;
         std::io::copy(&mut file, &mut out).map_err(|e| format!("copy: {}", e))?;
     }
-    Ok(format!("v{} — распаковано в AppData", APP_VERSION))
+    // Перенос пользовательских данных из папки, где лежал exe (например D:\yt):
+    // токены, профили, история, вкус — переезд в AppData без потери входа.
+    let mut moved = 0usize;
+    if let Ok(me) = std::env::current_exe() {
+        if let Some(src_dir) = me.parent() {
+            if src_dir != app_dir {
+                let names = [
+                    "config.json", "profiles.json", "active_profile.txt", "history.json",
+                    "favorites.json", "playlists.json", "taste.json", "stations.json", "browser.json",
+                ];
+                for n in names {
+                    let src = src_dir.join(n);
+                    let dst = app_dir.join(n);
+                    if src.exists() && !dst.exists() {
+                        if std::fs::copy(&src, &dst).is_ok() {
+                            moved += 1;
+                        }
+                    }
+                }
+                if let Ok(entries) = std::fs::read_dir(src_dir) {
+                    for e in entries.flatten() {
+                        let fname = e.file_name().to_string_lossy().to_string();
+                        let is_token = fname.starts_with("token_") && fname.ends_with("_oauth.json");
+                        let is_session = fname.starts_with("session_") && fname.ends_with(".json");
+                        if (is_token || is_session) && !app_dir.join(&fname).exists() {
+                            if std::fs::copy(e.path(), app_dir.join(&fname)).is_ok() {
+                                moved += 1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if moved > 0 {
+        Ok(format!("v{} — распаковано + перенесено твоих данных: {}", APP_VERSION, moved))
+    } else {
+        Ok(format!("v{} — распаковано в AppData", APP_VERSION))
+    }
 }
 
 fn step_python() -> Result<String, String> {
@@ -291,21 +329,66 @@ fn step_ets2() -> Result<String, String> {
     Ok(summary.join("; "))
 }
 
-fn step_start_server(app_dir: &std::path::Path) -> Result<String, String> {
-    let busy = std::net::TcpStream::connect("127.0.0.1:5000").is_ok();
+fn server_is_up() -> bool {
+    std::net::TcpStream::connect("127.0.0.1:5000").is_ok()
+}
+
+// Ярлык на рабочем столе → копия этого exe в папке установки.
+// Копия живёт в AppData, поэтому ярлык не сломается после удаления загрузок.
+fn ensure_desktop_shortcut(app_dir: &std::path::Path) -> Result<String, String> {
+    let me = std::env::current_exe().map_err(|e| format!("exe: {}", e))?;
+    let target = app_dir.join("ETS2 Radio DJ.exe");
+    if me != target {
+        std::fs::copy(&me, &target).map_err(|e| format!("copy exe: {}", e))?;
+    }
+    let ps = format!(
+        "$ws = New-Object -ComObject WScript.Shell; \
+         $d = $ws.SpecialFolders('Desktop'); \
+         $sc = $ws.CreateShortcut(\"$d\\ETS2 Radio DJ.lnk\"); \
+         $sc.TargetPath = '{exe}'; \
+         $sc.WorkingDirectory = '{dir}'; \
+         $sc.IconLocation = '{exe},0'; \
+         $sc.Description = 'Личное радио YouTube Music для ETS2'; \
+         $sc.Save()",
+        exe = target.display(),
+        dir = app_dir.display()
+    );
+    let code = run_hidden("powershell", &[
+        "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &ps,
+    ])?;
+    if code != 0 {
+        return Err(format!("powershell код {}", code));
+    }
+    Ok("ярлык «ETS2 Radio DJ» на рабочем столе".into())
+}
+
+fn step_start_server_and_shortcut(app_dir: &std::path::Path) -> Result<String, String> {
+    let busy = server_is_up();
     if !busy {
-        let bat = app_dir.join("start_radio.bat");
-        let _ = hidden_command("cmd", &[
-            "/c", "start", "ETS2RadioServer", "/min",
-            bat.to_str().unwrap_or("start_radio.bat"),
-        ]).spawn();
+        let py = find_python().ok_or_else(|| "Python не найден".to_string())?;
+        let server_py = app_dir.join("server.py");
+        let mut args: Vec<String> = vec![
+            "/c".into(), "start".into(), String::new(), "/min".into(), py.clone(),
+        ];
+        if py == "py" { args.push("-3".into()); }
+        args.push(server_py.to_string_lossy().to_string());
+        let argrefs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+        hidden_command("cmd", &argrefs)
+            .current_dir(app_dir)
+            .spawn()
+            .map_err(|e| format!("cmd: {}", e))?;
         std::thread::sleep(std::time::Duration::from_secs(5));
     }
-    if std::net::TcpStream::connect("127.0.0.1:5000").is_ok() {
-        Ok("сервер работает — http://127.0.0.1:5000".into())
+    let server_msg = if server_is_up() {
+        "сервер работает — http://127.0.0.1:5000".to_string()
     } else {
-        Ok("сервер не поднялся — запусти start_radio.bat вручную".into())
-    }
+        "сервер не поднялся — запусти start_radio.bat вручную".to_string()
+    };
+    let shortcut_msg = match ensure_desktop_shortcut(app_dir) {
+        Ok(d) => d,
+        Err(e) => format!("ярлык не создан ({})", e),
+    };
+    Ok(format!("{}; {}", server_msg, shortcut_msg))
 }
 
 fn run_install(state: Arc<Mutex<AppState>>) {
@@ -350,10 +433,14 @@ fn run_install(state: Arc<Mutex<AppState>>) {
             StepState::Done
         };
         state.lock().unwrap().mark(5, ws, &d);
-        // 7. Сервер (не поднялся — предупреждение)
+        // 7. Сервер + ярлык (не поднялся / ярлык не создался — предупреждение)
         state.lock().unwrap().mark(6, StepState::Active, "");
-        let d = step_start_server(&app_dir)?;
-        let ws = if d.contains("не поднялся") { StepState::Warn } else { StepState::Done };
+        let d = step_start_server_and_shortcut(&app_dir)?;
+        let ws = if d.contains("не поднялся") || d.contains("ярлык не создан") {
+            StepState::Warn
+        } else {
+            StepState::Done
+        };
         state.lock().unwrap().mark(6, ws, &d);
         Ok(())
     })();
@@ -365,18 +452,267 @@ fn run_install(state: Arc<Mutex<AppState>>) {
     if let Err(e) = result {
         st.fail = true;
         st.detail = e;
-        // пометить активный шаг как провальный
         if let Some(i) = st.steps.iter().position(|s| s.state == StepState::Active) {
             st.steps[i].state = StepState::Fail;
         }
     }
 }
 
-struct InstallerApp {
-    state: Arc<Mutex<AppState>>,
+// ===================== ЛАУНЧЕР =====================
+
+#[derive(Clone, Copy, PartialEq)]
+enum LaunchStatus {
+    Checking,
+    Running,
+    Starting,
+    Failed,
 }
 
-// Кружок состояния шага: цвет + глиф
+struct LaunchState {
+    status: LaunchStatus,
+}
+
+// Фоновый надзиратель: раз в 1.5с проверяет :5000, при падении поднимает
+// сервер и SMTC-мост. Повторная попытка не чаще раза в 6с.
+fn launch_monitor(state: Arc<Mutex<LaunchState>>, app_dir: std::path::PathBuf) {
+    let mut last_start = Instant::now() - Duration::from_secs(10);
+    let mut bridge_started = false;
+    loop {
+        if server_is_up() {
+            let mut st = state.lock().unwrap();
+            st.status = LaunchStatus::Running;
+            if !bridge_started {
+                bridge_started = true;
+                let bridge = app_dir.join("smtc_bridge.ps1");
+                if bridge.exists() {
+                    let _ = hidden_command("powershell", &[
+                        "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden",
+                        "-File", bridge.to_str().unwrap_or(""),
+                    ]).spawn();
+                }
+            }
+        } else if last_start.elapsed() > Duration::from_secs(6) {
+            {
+                let mut st = state.lock().unwrap();
+                st.status = LaunchStatus::Starting;
+            }
+            last_start = Instant::now();
+            let _ = std::fs::create_dir_all(&app_dir);
+            let py = find_python();
+            if let Some(py) = py {
+                let server_py = app_dir.join("server.py");
+                let mut args: Vec<String> = vec![
+                    "/c".into(), "start".into(), String::new(), "/min".into(), py.clone(),
+                ];
+                if py == "py" { args.push("-3".into()); }
+                args.push(server_py.to_string_lossy().to_string());
+                let argrefs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+                let _ = hidden_command("cmd", &argrefs)
+                    .current_dir(&app_dir)
+                    .spawn();
+            }
+            let bridge = app_dir.join("smtc_bridge.ps1");
+            if bridge.exists() {
+                let _ = hidden_command("powershell", &[
+                    "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden",
+                    "-File", bridge.to_str().unwrap_or(""),
+                ]).spawn();
+            }
+            let mut up = false;
+            for _ in 0..24 {
+                std::thread::sleep(Duration::from_millis(500));
+                if server_is_up() {
+                    up = true;
+                    break;
+                }
+            }
+            let mut st = state.lock().unwrap();
+            st.status = if up { LaunchStatus::Running } else { LaunchStatus::Failed };
+        }
+        std::thread::sleep(Duration::from_millis(1500));
+    }
+}
+
+struct LauncherApp {
+    state: Arc<Mutex<LaunchState>>,
+}
+
+impl eframe::App for LauncherApp {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        ctx.request_repaint_after(Duration::from_millis(600));
+        let st_status = self.state.lock().unwrap().status;
+
+        egui::TopBottomPanel::bottom("launcher_actions")
+            .exact_height(76.0)
+            .frame(egui::Frame::none().fill(BAR_BG))
+            .show(ctx, |ui| {
+                let rect = ui.available_rect_before_wrap();
+                ui.painter().line_segment(
+                    [rect.left_top(), rect.right_top()],
+                    egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(0x20, 0x28, 0x36)),
+                );
+                ui.add_space(13.0);
+                ui.horizontal(|ui| {
+                    ui.add_space(18.0);
+                    let open_enabled = st_status == LaunchStatus::Running;
+                    let open_btn = egui::Button::new(
+                        egui::RichText::new("Открыть приложение").size(13.0).strong()
+                            .color(if open_enabled { ON_ACCENT } else { DIM }),
+                    )
+                    .min_size(egui::vec2(170.0, 44.0))
+                    .fill(if open_enabled { ACCENT } else { CARD2 })
+                    .rounding(10.0);
+                    if ui.add_enabled(open_enabled, open_btn).clicked() {
+                        let _ = std::process::Command::new("cmd")
+                            .args(["/c", "start", "", "http://127.0.0.1:5000"])
+                            .creation_flags(CREATE_NO_WINDOW)
+                            .spawn();
+                    }
+                    ui.add_space(10.0);
+                    let start_label = match st_status {
+                        LaunchStatus::Running => "Радио уже работает",
+                        LaunchStatus::Starting => "Запускаю…",
+                        _ => "Запустить радио",
+                    };
+                    let start_enabled = st_status != LaunchStatus::Running && st_status != LaunchStatus::Starting;
+                    let start_btn = egui::Button::new(
+                        egui::RichText::new(start_label).size(13.0)
+                            .color(if start_enabled { TEXT } else { DIM }),
+                    )
+                    .min_size(egui::vec2(160.0, 44.0))
+                    .fill(CARD2)
+                    .rounding(10.0);
+                    if ui.add_enabled(start_enabled, start_btn).clicked() {
+                        // форсируем немедленную попытку: сбрасываем «кулер» монитор-потока
+                        // проще: просто ждём его цикл (макс 6с)
+                    }
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.add_space(18.0);
+                        let quit = egui::Button::new(
+                            egui::RichText::new("Выход").size(13.0).color(MUTED),
+                        )
+                        .min_size(egui::vec2(90.0, 44.0))
+                        .fill(CARD2)
+                        .rounding(10.0);
+                        if ui.add(quit).clicked() {
+                            std::process::exit(0);
+                        }
+                    });
+                });
+            });
+
+        egui::CentralPanel::default()
+            .frame(egui::Frame::none().fill(BG))
+            .show(ctx, |ui| {
+                egui::Frame::none()
+                    .inner_margin(egui::Margin::symmetric(20.0, 16.0))
+                    .show(ui, |ui| {
+                        // ---- HERO (компактный) ----
+                        let (hero, _) = ui.allocate_exact_size(
+                            egui::vec2(ui.available_width(), 74.0),
+                            egui::Sense::hover(),
+                        );
+                        let p = ui.painter();
+                        p.rect_filled(hero, egui::Rounding::same(14.0), ACCENT);
+                        p.rect_filled(hero, egui::Rounding::same(14.0), egui::Color32::from_rgba_premultiplied(2, 24, 14, 110));
+                        p.circle_filled(hero.right_center() + egui::vec2(36.0, -4.0), 26.0, egui::Color32::from_rgba_premultiplied(255, 255, 255, 16));
+                        p.circle_filled(hero.right_center() + egui::vec2(80.0, 12.0), 16.0, egui::Color32::from_rgba_premultiplied(255, 255, 255, 12));
+                        let logo_c = hero.left_center() + egui::vec2(34.0, 0.0);
+                        p.circle_filled(logo_c, 22.0, BG);
+                        p.text(logo_c, egui::Align2::CENTER_CENTER, "♪", egui::FontId::proportional(22.0), ACCENT);
+                        p.text(
+                            hero.left_top() + egui::vec2(70.0, 28.0),
+                            egui::Align2::LEFT_CENTER,
+                            "ETS2 RADIO DJ",
+                            egui::FontId::proportional(19.0),
+                            TEXT,
+                        );
+                        p.text(
+                            hero.left_top() + egui::vec2(72.0, 52.0),
+                            egui::Align2::LEFT_CENTER,
+                            "Личное радио YouTube Music для ETS2",
+                            egui::FontId::proportional(11.5),
+                            egui::Color32::from_rgb(0xD7, 0xF5, 0xE3),
+                        );
+                        let chip_c = hero.right_top() + egui::vec2(-26.0, 18.0);
+                        p.rect_filled(
+                            egui::Rect::from_center_size(chip_c, egui::vec2(44.0, 18.0)),
+                            egui::Rounding::same(9.0),
+                            egui::Color32::from_rgba_premultiplied(0, 0, 0, 90),
+                        );
+                        p.text(chip_c, egui::Align2::CENTER_CENTER, format!("v{}", APP_VERSION), egui::FontId::monospace(10.0), TEXT);
+
+                        ui.add_space(12.0);
+
+                        // ---- СТАТУС ----
+                        egui::Frame::none()
+                            .fill(CARD)
+                            .rounding(14.0)
+                            .stroke(egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(0x1F, 0x26, 0x33)))
+                            .inner_margin(egui::Margin::symmetric(16.0, 14.0))
+                            .show(ui, |ui| {
+                                let (msg, color, dot) = match st_status {
+                                    LaunchStatus::Running => (
+                                        "Радио работает".to_string(),
+                                        ACCENT,
+                                        ACCENT,
+                                    ),
+                                    LaunchStatus::Starting => (
+                                        "Запускаю радио…".to_string(),
+                                        YELLOW,
+                                        YELLOW,
+                                    ),
+                                    LaunchStatus::Failed => (
+                                        "Не удалось запустить — проверь Python и папку установки".to_string(),
+                                        RED,
+                                        RED,
+                                    ),
+                                    LaunchStatus::Checking => (
+                                        "Проверяю радио…".to_string(),
+                                        MUTED,
+                                        DIM,
+                                    ),
+                                };
+                                ui.horizontal(|ui| {
+                                    let (dr, _) = ui.allocate_exact_size(egui::vec2(12.0, 12.0), egui::Sense::hover());
+                                    ui.painter().circle_filled(dr.center(), 5.0, dot);
+                                    ui.label(egui::RichText::new(msg).color(color).size(15.0).strong());
+                                });
+                                if st_status == LaunchStatus::Running {
+                                    ui.add_space(4.0);
+                                    ui.label(egui::RichText::new("http://127.0.0.1:5000").color(MUTED).size(12.0).monospace());
+                                }
+                                ui.add_space(6.0);
+                                ui.label(
+                                    egui::RichText::new(
+                                        "Сервер и медиа-кнопки стартуют сами. Закрой окно —\nрадио продолжит работать в фоне.",
+                                    ).color(DIM).size(11.0),
+                                );
+                            });
+
+                        ui.add_space(10.0);
+                        if ui.add(
+                            egui::Button::new(
+                                egui::RichText::new("Переустановить файлы").size(11.0).color(MUTED),
+                            )
+                            .min_size(egui::vec2(160.0, 30.0))
+                            .fill(CARD2)
+                            .rounding(8.0),
+                        ).clicked() {
+                            if let Ok(me) = std::env::current_exe() {
+                                let _ = std::process::Command::new(me)
+                                    .arg("--install")
+                                    .spawn();
+                            }
+                            std::process::exit(0);
+                        }
+                    });
+            });
+    }
+}
+
+// ===================== УСТАНОВЩИК =====================
+
 fn draw_step_icon(ui: &egui::Ui, center: egui::Pos2, state: StepState, spinner: &str) {
     let p = ui.painter();
     match state {
@@ -402,6 +738,15 @@ fn draw_step_icon(ui: &egui::Ui, center: egui::Pos2, state: StepState, spinner: 
     }
 }
 
+fn step_color(s: StepState) -> egui::Color32 {
+    match s {
+        StepState::Done => ACCENT,
+        StepState::Warn => YELLOW,
+        StepState::Fail => RED,
+        _ => TEXT,
+    }
+}
+
 impl eframe::App for InstallerApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let running = self.state.lock().unwrap().running;
@@ -420,7 +765,6 @@ impl eframe::App for InstallerApp {
             .exact_height(84.0)
             .frame(egui::Frame::none().fill(BAR_BG))
             .show(ctx, |ui| {
-                // тонкая линия-граница сверху панели
                 let rect = ui.available_rect_before_wrap();
                 ui.painter().line_segment(
                     [rect.left_top(), rect.right_top()],
@@ -458,7 +802,6 @@ impl eframe::App for InstallerApp {
                             .creation_flags(CREATE_NO_WINDOW)
                             .spawn();
                     }
-                    // Выход прижат вправо
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         ui.add_space(20.0);
                         let quit = egui::Button::new(
@@ -492,7 +835,6 @@ impl eframe::App for InstallerApp {
                             let p = ui.painter();
                             p.rect_filled(hero, egui::Rounding::same(16.0), ACCENT);
                             p.rect_filled(hero, egui::Rounding::same(16.0), egui::Color32::from_rgba_premultiplied(2, 24, 14, 110));
-                            // декоративные круги справа
                             p.circle_filled(hero.right_center() + egui::vec2(46.0, -6.0), 34.0, egui::Color32::from_rgba_premultiplied(255, 255, 255, 16));
                             p.circle_filled(hero.right_center() + egui::vec2(110.0, 18.0), 22.0, egui::Color32::from_rgba_premultiplied(255, 255, 255, 12));
                             p.circle_filled(hero.right_center() + egui::vec2(80.0, -26.0), 12.0, egui::Color32::from_rgba_premultiplied(255, 255, 255, 20));
@@ -514,7 +856,6 @@ impl eframe::App for InstallerApp {
                                 egui::FontId::proportional(12.5),
                                 egui::Color32::from_rgb(0xD7, 0xF5, 0xE3),
                             );
-                            // чип версии справа сверху
                             let chip_c = hero.right_top() + egui::vec2(-30.0, 22.0);
                             p.rect_filled(
                                 egui::Rect::from_center_size(chip_c, egui::vec2(46.0, 20.0)),
@@ -596,7 +937,7 @@ impl eframe::App for InstallerApp {
                             let (msg, msg_color) = if st.fail {
                                 (format!("Ошибка: {}", st.detail), RED)
                             } else if st.done {
-                                ("Установка завершена — приятной дороги!".to_string(), ACCENT)
+                                ("Установка завершена — ярлык «ETS2 Radio DJ» на рабочем столе!".to_string(), ACCENT)
                             } else if st.running {
                                 let active_idx = st.steps.iter().position(|s| s.state == StepState::Active).unwrap_or(0);
                                 (format!("{} {}", spinner, STEP_NAMES[active_idx]), TEXT)
@@ -615,31 +956,59 @@ impl eframe::App for InstallerApp {
     }
 }
 
-fn step_color(s: StepState) -> egui::Color32 {
-    match s {
-        StepState::Done => ACCENT,
-        StepState::Warn => YELLOW,
-        StepState::Fail => RED,
-        _ => TEXT,
-    }
+struct InstallerApp {
+    state: Arc<Mutex<AppState>>,
 }
 
 fn main() -> eframe::Result<()> {
-    let state = Arc::new(Mutex::new(AppState::new()));
-    let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_title("ETS2 Radio DJ — установка")
-            .with_inner_size([780.0, 640.0])
-            .with_min_inner_size([640.0, 420.0])
-            .with_icon(egui::IconData {
-                width: 32,
-                height: 32,
-                rgba: icon_rgba_32(),
-            }),
-        ..Default::default()
-    };
+    let args: Vec<String> = std::env::args().collect();
+    let force_install = args.iter().any(|a| a == "--install");
+    let installed = install_dir().join("server.py").exists();
+
+    let options: eframe::NativeOptions;
+    let app: Box<dyn eframe::App>;
+
+    if force_install || !installed {
+        // РЕЖИМ УСТАНОВЩИКА
+        let state = Arc::new(Mutex::new(AppState::new()));
+        options = eframe::NativeOptions {
+            viewport: egui::ViewportBuilder::default()
+                .with_title("ETS2 Radio DJ — установка")
+                .with_inner_size([780.0, 640.0])
+                .with_min_inner_size([640.0, 420.0])
+                .with_icon(egui::IconData {
+                    width: 32,
+                    height: 32,
+                    rgba: icon_rgba_32(),
+                }),
+            ..Default::default()
+        };
+        app = Box::new(InstallerApp { state });
+    } else {
+        // РЕЖИМ ЛАУНЧЕРА
+        let state = Arc::new(Mutex::new(LaunchState { status: LaunchStatus::Checking }));
+        let app_dir = install_dir();
+        {
+            let state = state.clone();
+            std::thread::spawn(move || launch_monitor(state, app_dir));
+        }
+        options = eframe::NativeOptions {
+            viewport: egui::ViewportBuilder::default()
+                .with_title("ETS2 Radio DJ")
+                .with_inner_size([500.0, 430.0])
+                .with_min_inner_size([440.0, 360.0])
+                .with_icon(egui::IconData {
+                    width: 32,
+                    height: 32,
+                    rgba: icon_rgba_32(),
+                }),
+            ..Default::default()
+        };
+        app = Box::new(LauncherApp { state });
+    }
+
     eframe::run_native(
-        "ETS2 Radio DJ — установка",
+        "ETS2 Radio DJ",
         options,
         Box::new(move |cc| {
             let mut style = (*cc.egui_ctx.style()).clone();
@@ -654,7 +1023,7 @@ fn main() -> eframe::Result<()> {
             style.visuals.selection.stroke.color = ACCENT;
             style.spacing.item_spacing = egui::vec2(8.0, 4.0);
             cc.egui_ctx.set_style(style);
-            Box::new(InstallerApp { state })
+            app
         }),
     )
 }
@@ -671,7 +1040,6 @@ fn icon_rgba_32() -> Vec<u8> {
     let bg = [0x0Au8, 0x0D, 0x12, 0xFF];
     for y in 0..32 {
         for x in 0..32 {
-            // скруглённые углы
             let corner = |cx: i32, cy: i32| -> bool {
                 let dx = (x - cx) * (x - cx);
                 let dy = (y - cy) * (y - cy);
@@ -688,7 +1056,6 @@ fn icon_rgba_32() -> Vec<u8> {
     }
     let acc = [0x1Du8, 0xB9, 0x54, 0xFF];
     let dark = [0x0Au8, 0x0D, 0x12, 0xFF];
-    // зелёный круг
     for y in 0..32 {
         for x in 0..32 {
             let dx = x - 16; let dy = y - 16;
@@ -697,7 +1064,6 @@ fn icon_rgba_32() -> Vec<u8> {
             }
         }
     }
-    // «нота»: круг + палка
     for y in 0..32 {
         for x in 0..32 {
             let dx = x - 13; let dy = y - 22;
